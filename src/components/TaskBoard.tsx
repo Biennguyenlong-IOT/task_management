@@ -1,0 +1,478 @@
+import React, { useState, useEffect } from 'react';
+import { User } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
+import { Task, TaskStatus, UserProfile } from '../types';
+import { TaskCard } from './TaskCard';
+import { SortableTaskCard } from './SortableTaskCard';
+import { TaskDetailModal } from './TaskDetailModal';
+import { Plus, LogOut, LayoutGrid, List, CheckCircle2, Clock, PlayCircle, Search, GripVertical } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { cn } from '../lib/utils';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragOverEvent,
+  DragEndEvent,
+  defaultDropAnimationSideEffects,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+
+interface TaskBoardProps {
+  user: User;
+}
+
+export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [newTask, setNewTask] = useState({ title: '', description: '' });
+  const [newTaskAssignees, setNewTaskAssignees] = useState<string[]>([]);
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  useEffect(() => {
+    fetchTasks();
+    fetchProfiles();
+
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel('tasks-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+        },
+        async (payload) => {
+          console.log('Realtime task change received:', payload);
+          // Always refetch to get joined data (assignees)
+          fetchTasks();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_assignees',
+        },
+        () => {
+          console.log('Realtime assignee change received');
+          fetchTasks(); 
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user.id]);
+
+  const fetchTasks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select(`
+          *,
+          task_assignees (user_id)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      const filteredData = (data || []).filter(task => 
+        task.user_id === user.id || 
+        task.task_assignees?.some((a: any) => a.user_id === user.id)
+      );
+
+      setTasks(filteredData as Task[]);
+    } catch (err) {
+      console.error('Error fetching tasks:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProfiles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, display_name');
+      if (error) throw error;
+      setProfiles(data || []);
+    } catch (err) {
+      console.error('Error fetching profiles:', err);
+    }
+  };
+
+  const createTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTask.title.trim()) return;
+
+    try {
+      const { data, error } = await supabase.from('tasks').insert([
+        {
+          title: newTask.title,
+          description: newTask.description,
+          status: 'todo',
+          user_id: user.id,
+        },
+      ]).select();
+
+      if (error) throw error;
+      
+      const createdTask = data?.[0];
+      if (createdTask && newTaskAssignees.length > 0) {
+        const assigneeData = newTaskAssignees.map(userId => ({
+          task_id: createdTask.id,
+          user_id: userId
+        }));
+        await supabase.from('task_assignees').insert(assigneeData);
+      }
+
+      setNewTask({ title: '', description: '' });
+      setNewTaskAssignees([]);
+      setIsModalOpen(false);
+      fetchTasks();
+    } catch (err) {
+      console.error('Error creating task:', err);
+    }
+  };
+
+  const updateTaskStatus = async (id: string, status: TaskStatus) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status })
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (err) {
+      console.error('Error updating task:', err);
+    }
+  };
+
+  const deleteTask = async (id: string) => {
+    // Optimistic update
+    const previousTasks = [...tasks];
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+
+    try {
+      const { error } = await supabase.from('tasks').delete().eq('id', id);
+      if (error) {
+        // Rollback on error
+        setTasks(previousTasks);
+        throw error;
+      }
+    } catch (err) {
+      console.error('Error deleting task:', err);
+    }
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const task = tasks.find((t) => t.id === active.id);
+    if (task) setActiveTask(task);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id;
+    const overId = over.id;
+
+    if (activeId === overId) return;
+
+    const isActiveATask = active.data.current?.type === 'Task';
+    const isOverATask = over.data.current?.type === 'Task';
+
+    if (!isActiveATask) return;
+
+    // Dropping a Task over another Task
+    if (isActiveATask && isOverATask) {
+      setTasks((tasks) => {
+        const activeIndex = tasks.findIndex((t) => t.id === activeId);
+        const overIndex = tasks.findIndex((t) => t.id === overId);
+
+        if (tasks[activeIndex].status !== tasks[overIndex].status) {
+          tasks[activeIndex].status = tasks[overIndex].status;
+          return arrayMove(tasks, activeIndex, overIndex - 1);
+        }
+
+        return arrayMove(tasks, activeIndex, overIndex);
+      });
+    }
+
+    const isOverAColumn = over.data.current?.type === 'Column';
+
+    // Dropping a Task over a Column
+    if (isActiveATask && isOverAColumn) {
+      setTasks((tasks) => {
+        const activeIndex = tasks.findIndex((t) => t.id === activeId);
+        tasks[activeIndex].status = overId as TaskStatus;
+        return arrayMove(tasks, activeIndex, activeIndex);
+      });
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveTask(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const task = tasks.find((t) => t.id === active.id);
+    if (task) {
+      await updateTaskStatus(task.id, task.status);
+    }
+  };
+
+  const filteredTasks = tasks.filter(task => 
+    task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    task.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const columns: { id: TaskStatus; title: string; icon: React.ReactNode; color: string }[] = [
+    { id: 'todo', title: 'To Do', icon: <Clock className="w-4 h-4" />, color: 'text-stone-400' },
+    { id: 'in-progress', title: 'In Progress', icon: <PlayCircle className="w-4 h-4" />, color: 'text-amber-500' },
+    { id: 'done', title: 'Completed', icon: <CheckCircle2 className="w-4 h-4" />, color: 'text-emerald-500' },
+  ];
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Header */}
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-12">
+        <div>
+          <h1 className="text-3xl font-serif font-medium text-stone-900">My Workspace</h1>
+          <p className="text-stone-500 mt-1">Manage your tasks and stay productive.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+            <input 
+              type="text"
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-4 py-2 rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all w-full md:w-64"
+            />
+          </div>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-stone-900 text-white px-4 py-2 rounded-xl font-medium hover:bg-stone-800 transition-all flex items-center gap-2 shadow-sm"
+          >
+            <Plus className="w-4 h-4" /> New Task
+          </button>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+            title="Sign Out"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      {/* Board Layout */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {columns.map((column) => (
+            <div key={column.id} className="flex flex-col gap-4">
+              <div className="flex items-center justify-between px-2">
+                <div className="flex items-center gap-2">
+                  <span className={column.color}>{column.icon}</span>
+                  <h2 className="font-medium text-stone-900">{column.title}</h2>
+                  <span className="bg-stone-200 text-stone-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    {filteredTasks.filter((t) => t.status === column.id).length}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex flex-col gap-4 min-h-[500px] bg-stone-100/50 p-3 rounded-2xl border border-stone-200/50">
+                <SortableContext
+                  items={filteredTasks.filter((t) => t.status === column.id).map(t => t.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <AnimatePresence mode="popLayout">
+                    {filteredTasks
+                      .filter((t) => t.status === column.id)
+                      .map((task) => (
+                        <SortableTaskCard
+                          key={task.id}
+                          task={task}
+                          currentUserId={user.id}
+                          onDelete={deleteTask}
+                          onStatusChange={updateTaskStatus}
+                          onClick={setSelectedTask}
+                        />
+                      ))}
+                  </AnimatePresence>
+                </SortableContext>
+                
+                {filteredTasks.filter((t) => t.status === column.id).length === 0 && (
+                  <div className="flex-1 flex flex-col items-center justify-center text-stone-400 py-12">
+                    <p className="text-sm italic">Kéo thả vào đây</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <DragOverlay adjustScale={false}>
+          {activeTask ? (
+            <div className="rotate-3 scale-105 shadow-2xl">
+              <TaskCard
+                task={activeTask}
+                currentUserId={user.id}
+                onDelete={() => {}}
+                onStatusChange={() => {}}
+                onClick={() => {}}
+              />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {/* Task Detail Modal */}
+      <AnimatePresence>
+        {selectedTask && (
+          <TaskDetailModal
+            task={selectedTask}
+            userId={user.id}
+            userEmail={user.email}
+            onClose={() => setSelectedTask(null)}
+            onStatusChange={updateTaskStatus}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* New Task Modal */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-8">
+                <h2 className="text-2xl font-serif font-medium text-stone-900 mb-6">Create New Task</h2>
+                <form onSubmit={createTask} className="space-y-6">
+                  <div>
+                    <label className="block text-xs font-medium uppercase tracking-wider text-stone-400 mb-2 ml-1">
+                      Task Title
+                    </label>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={newTask.title}
+                      onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                      className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-stone-50/50"
+                      placeholder="What needs to be done?"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium uppercase tracking-wider text-stone-400 mb-2 ml-1">
+                      Description (Optional)
+                    </label>
+                    <textarea
+                      value={newTask.description}
+                      onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                      className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-stone-50/50 min-h-[100px] resize-none"
+                      placeholder="Add more details about this task..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium uppercase tracking-wider text-stone-400 mb-2 ml-1">
+                      Assign To
+                    </label>
+                    <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto p-1 scrollbar-hide">
+                      {profiles.map((profile) => {
+                        const isSelected = newTaskAssignees.includes(profile.id);
+                        return (
+                          <button
+                            key={profile.id}
+                            type="button"
+                            onClick={() => {
+                              setNewTaskAssignees(prev => 
+                                isSelected ? prev.filter(id => id !== profile.id) : [...prev, profile.id]
+                              );
+                            }}
+                            className={cn(
+                              "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
+                              isSelected 
+                                ? "bg-emerald-500 text-white border-emerald-500" 
+                                : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
+                            )}
+                          >
+                            {profile.email?.split('@')[0]} {profile.id === user.id ? '(You)' : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      className="flex-1 px-4 py-3 rounded-xl border border-stone-200 text-stone-600 font-medium hover:bg-stone-50 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 px-4 py-3 rounded-xl bg-stone-900 text-white font-medium hover:bg-stone-800 transition-all shadow-lg shadow-stone-900/20"
+                    >
+                      Create Task
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};

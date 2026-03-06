@@ -1,0 +1,5 @@
+{
+  "name": "Supabase TaskFlow",
+  "description": "A real-time task management application powered by Supabase with live updates and collaborative features.",
+  "requestFramePermissions": []
+}
