@@ -152,15 +152,20 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
           task_id: createdTask.id,
           user_id: userId
         }));
-        await supabase.from('task_assignees').insert(assigneeData);
+        const { error: assigneeError } = await supabase.from('task_assignees').insert(assigneeData);
+        if (assigneeError) {
+          console.error('Error assigning users:', assigneeError);
+          alert('Task đã được tạo nhưng không thể gán người thực hiện: ' + assigneeError.message);
+        }
       }
 
       setNewTask({ title: '', description: '' });
       setNewTaskAssignees([]);
       setIsModalOpen(false);
       fetchTasks();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating task:', err);
+      alert('Không thể tạo task: ' + (err.message || 'Lỗi không xác định'));
     }
   };
 

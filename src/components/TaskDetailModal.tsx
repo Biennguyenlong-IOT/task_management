@@ -81,8 +81,9 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         if (error) throw error;
         setCurrentAssignees(prev => [...prev, assigneeId]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating assignee:', err);
+      alert('Không thể cập nhật người thực hiện: ' + (err.message || 'Lỗi quyền truy cập (RLS)'));
     } finally {
       setUpdatingAssignee(false);
     }
