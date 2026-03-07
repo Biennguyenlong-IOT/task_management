@@ -13,6 +13,7 @@ interface TaskDetailModalProps {
   userEmail: string | undefined;
   onClose: () => void;
   onStatusChange: (id: string, status: TaskStatus) => void;
+  onDelete: (id: string) => void;
 }
 
 export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ 
@@ -20,7 +21,8 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   userId, 
   userEmail, 
   onClose,
-  onStatusChange 
+  onStatusChange,
+  onDelete
 }) => {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [currentAssignees, setCurrentAssignees] = useState<string[]>([]);
@@ -155,34 +157,37 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             <div>
               <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">Nhóm thực hiện</h3>
               <div className="space-y-2 max-h-[150px] overflow-y-auto pr-2 scrollbar-hide">
-                {profiles.map((profile) => {
-                  const isAssigned = currentAssignees.includes(profile.id);
-                  return (
-                    <button
-                      key={profile.id}
-                      disabled={updatingAssignee || task.user_id !== userId}
-                      onClick={() => toggleAssignee(profile.id)}
-                      className={cn(
-                        "w-full flex items-center justify-between px-4 py-2.5 rounded-xl border transition-all text-sm",
-                        isAssigned 
-                          ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
-                          : "bg-white border-stone-200 text-stone-600 hover:border-stone-300"
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className={cn(
-                          "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
-                          isAssigned ? "bg-emerald-500 text-white" : "bg-stone-100 text-stone-400"
-                        )}>
-                          {profile.email?.charAt(0).toUpperCase()}
+                {profiles
+                  .map((profile) => {
+                    const isAssigned = currentAssignees.includes(profile.id);
+                    const isMe = profile.id === userId;
+                    return (
+                      <button
+                        key={profile.id}
+                        disabled={updatingAssignee || task.user_id !== userId}
+                        onClick={() => toggleAssignee(profile.id)}
+                        className={cn(
+                          "w-full flex items-center justify-between px-4 py-2.5 rounded-xl border transition-all text-sm",
+                          isAssigned 
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
+                            : "bg-white border-stone-200 text-stone-600 hover:border-stone-300"
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={cn(
+                            "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
+                            isAssigned ? "bg-emerald-500 text-white" : "bg-stone-100 text-stone-400"
+                          )}>
+                            {profile.email?.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="truncate max-w-[180px]">
+                            {profile.email} {isMe && "(Bạn)"}
+                          </span>
                         </div>
-                        <span className="truncate max-w-[180px]">{profile.email}</span>
-                        {profile.id === userId && <span className="text-[10px] opacity-60">(Bạn)</span>}
-                      </div>
-                      {isAssigned && <CheckCircle2 className="w-4 h-4" />}
-                    </button>
-                  );
-                })}
+                        {isAssigned && <CheckCircle2 className="w-4 h-4" />}
+                      </button>
+                    );
+                  })}
               </div>
               {task.user_id !== userId && (
                 <p className="text-[10px] text-stone-400 mt-2 italic">
@@ -192,7 +197,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             </div>
 
             <div>
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">Thay đổi trạng thái</h3>
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">Thao tác</h3>
               <div className="flex flex-wrap gap-2">
                 {(['todo', 'in-progress', 'done'] as TaskStatus[]).map((s) => (
                   <button
@@ -208,6 +213,20 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     {s.replace('-', ' ')}
                   </button>
                 ))}
+                
+                {task.user_id === userId && (
+                  <button
+                    onClick={() => {
+                      if (confirm('Bạn có chắc chắn muốn xoá task này?')) {
+                        onDelete(task.id);
+                        onClose();
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl text-sm font-medium transition-all border border-red-200 text-red-600 hover:bg-red-50"
+                  >
+                    Xoá Task
+                  </button>
+                )}
               </div>
             </div>
           </div>

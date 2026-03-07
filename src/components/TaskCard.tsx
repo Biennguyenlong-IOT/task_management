@@ -73,7 +73,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, currentUserId, onDelet
                 <Clock className="w-4 h-4" /> Move to To Do
               </button>
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   onStatusChange(task.id, 'in-progress');
                   setShowMenu(false);
                 }}
@@ -82,7 +83,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, currentUserId, onDelet
                 <PlayCircle className="w-4 h-4" /> Move to In Progress
               </button>
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   onStatusChange(task.id, 'done');
                   setShowMenu(false);
                 }}
@@ -94,7 +96,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, currentUserId, onDelet
                 <>
                   <div className="h-px bg-stone-100 my-1" />
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       onDelete(task.id);
                       setShowMenu(false);
                     }}

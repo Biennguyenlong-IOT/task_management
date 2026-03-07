@@ -9,6 +9,7 @@ export interface Task {
   user_id: string;
   assigned_to: string | null;
   task_assignees?: { user_id: string }[];
+  position?: number;
 }
 
 export interface TaskComment {

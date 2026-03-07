@@ -20,6 +20,7 @@ import {
   DragOverEvent,
   DragEndEvent,
   defaultDropAnimationSideEffects,
+  useDroppable,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -31,6 +32,26 @@ import {
 interface TaskBoardProps {
   user: User;
 }
+
+interface DroppableColumnProps {
+  id: TaskStatus;
+  children: React.ReactNode;
+}
+
+const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, children }) => {
+  const { setNodeRef } = useDroppable({
+    id,
+    data: {
+      type: 'Column',
+    },
+  });
+
+  return (
+    <div ref={setNodeRef} className="flex flex-col gap-4 min-h-[500px] bg-stone-100/50 p-3 rounded-2xl border border-stone-200/50">
+      {children}
+    </div>
+  );
+};
 
 export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -101,16 +122,24 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
           *,
           task_assignees (user_id)
         `)
+        .order('position', { ascending: true })
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      
-      const filteredData = (data || []).filter(task => 
-        task.user_id === user.id || 
-        task.task_assignees?.some((a: any) => a.user_id === user.id)
-      );
-
-      setTasks(filteredData as Task[]);
+      if (error) {
+        // Fallback if position column doesn't exist yet
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('tasks')
+          .select(`
+            *,
+            task_assignees (user_id)
+          `)
+          .order('created_at', { ascending: false });
+        
+        if (fallbackError) throw fallbackError;
+        setTasks(fallbackData as Task[]);
+      } else {
+        setTasks(data as Task[]);
+      }
     } catch (err) {
       console.error('Error fetching tasks:', err);
     } finally {
@@ -135,20 +164,27 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
     if (!newTask.title.trim()) return;
 
     try {
+      const maxPos = tasks.length > 0 
+        ? Math.max(...tasks.map(t => t.position || 0)) 
+        : 0;
+
       const { data, error } = await supabase.from('tasks').insert([
         {
           title: newTask.title,
           description: newTask.description,
           status: 'todo',
           user_id: user.id,
+          position: maxPos + 1000,
         },
       ]).select();
 
       if (error) throw error;
       
       const createdTask = data?.[0];
-      if (createdTask && newTaskAssignees.length > 0) {
-        const assigneeData = newTaskAssignees.map(userId => ({
+      if (createdTask) {
+        // Always assign the creator, plus any selected users
+        const allAssignees = Array.from(new Set([user.id, ...newTaskAssignees]));
+        const assigneeData = allAssignees.map(userId => ({
           task_id: createdTask.id,
           user_id: userId
         }));
@@ -177,8 +213,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
         .eq('id', id);
 
       if (error) throw error;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating task:', err);
+      alert('Không thể thay đổi trạng thái: ' + (err.message || 'Bạn không có quyền thực hiện thao tác này'));
+      fetchTasks(); // Revert UI state
     }
   };
 
@@ -226,8 +264,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
         const overIndex = tasks.findIndex((t) => t.id === overId);
 
         if (tasks[activeIndex].status !== tasks[overIndex].status) {
-          tasks[activeIndex].status = tasks[overIndex].status;
-          return arrayMove(tasks, activeIndex, overIndex - 1);
+          const newTasks = [...tasks];
+          newTasks[activeIndex] = { ...newTasks[activeIndex], status: tasks[overIndex].status };
+          return arrayMove(newTasks, activeIndex, overIndex);
         }
 
         return arrayMove(tasks, activeIndex, overIndex);
@@ -240,8 +279,12 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
     if (isActiveATask && isOverAColumn) {
       setTasks((tasks) => {
         const activeIndex = tasks.findIndex((t) => t.id === activeId);
-        tasks[activeIndex].status = overId as TaskStatus;
-        return arrayMove(tasks, activeIndex, activeIndex);
+        if (tasks[activeIndex].status !== overId) {
+          const newTasks = [...tasks];
+          newTasks[activeIndex] = { ...newTasks[activeIndex], status: overId as TaskStatus };
+          return arrayMove(newTasks, activeIndex, activeIndex);
+        }
+        return tasks;
       });
     }
   };
@@ -251,9 +294,48 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
     const { active, over } = event;
     if (!over) return;
 
-    const task = tasks.find((t) => t.id === active.id);
+    const activeId = active.id;
+    const task = tasks.find((t) => t.id === activeId);
+    
     if (task) {
-      await updateTaskStatus(task.id, task.status);
+      // Calculate new position based on neighbors in the current state
+      const newIndex = tasks.findIndex(t => t.id === activeId);
+      const prevTask = tasks[newIndex - 1];
+      const nextTask = tasks[newIndex + 1];
+
+      let newPosition = task.position || 0;
+
+      if (!prevTask && !nextTask) {
+        newPosition = 1000;
+      } else if (!prevTask) {
+        newPosition = (nextTask.position || 0) / 2;
+      } else if (!nextTask) {
+        newPosition = (prevTask.position || 0) + 1000;
+      } else {
+        newPosition = ((prevTask.position || 0) + (nextTask.position || 0)) / 2;
+      }
+
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({ 
+            status: task.status,
+            position: newPosition 
+          })
+          .eq('id', task.id);
+
+        if (error) {
+          console.error('Database update failed:', error);
+          alert('Bạn không có quyền chuyển task này. Chỉ chủ task hoặc người được gán mới có quyền.');
+          fetchTasks(); // Revert UI
+        } else {
+          // Update local state with final position
+          setTasks(prev => prev.map(t => t.id === task.id ? { ...t, position: newPosition } : t));
+        }
+      } catch (err) {
+        console.error('Error in handleDragEnd:', err);
+        await updateTaskStatus(task.id, task.status);
+      }
     }
   };
 
@@ -274,9 +356,20 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-12">
         <div>
           <h1 className="text-3xl font-serif font-medium text-stone-900">My Workspace</h1>
-          <p className="text-stone-500 mt-1">Manage your tasks and stay productive.</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-stone-500">Chào, <span className="text-emerald-600 font-medium">{user.email}</span></p>
+            <span className="w-1 h-1 rounded-full bg-stone-300" />
+            <p className="text-stone-400 text-sm">Manage your tasks and stay productive.</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => fetchTasks()}
+            className="p-2 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+            title="Tải lại dữ liệu"
+          >
+            <Clock className="w-5 h-5" />
+          </button>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
             <input 
@@ -324,7 +417,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
                 </div>
               </div>
               
-              <div className="flex flex-col gap-4 min-h-[500px] bg-stone-100/50 p-3 rounded-2xl border border-stone-200/50">
+              <DroppableColumn id={column.id}>
                 <SortableContext
                   items={filteredTasks.filter((t) => t.status === column.id).map(t => t.id)}
                   strategy={verticalListSortingStrategy}
@@ -346,11 +439,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
                 </SortableContext>
                 
                 {filteredTasks.filter((t) => t.status === column.id).length === 0 && (
-                  <div className="flex-1 flex flex-col items-center justify-center text-stone-400 py-12">
-                    <p className="text-sm italic">Kéo thả vào đây</p>
+                  <div className="flex-1 flex flex-col items-center justify-center text-stone-400 py-12 px-4 text-center pointer-events-none">
+                    <p className="text-sm italic mb-2">Kéo thả vào đây</p>
                   </div>
                 )}
-              </div>
+              </DroppableColumn>
             </div>
           ))}
         </div>
@@ -379,6 +472,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
             userEmail={user.email}
             onClose={() => setSelectedTask(null)}
             onStatusChange={updateTaskStatus}
+            onDelete={deleteTask}
           />
         )}
       </AnimatePresence>
@@ -433,28 +527,30 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
                       Assign To
                     </label>
                     <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto p-1 scrollbar-hide">
-                      {profiles.map((profile) => {
-                        const isSelected = newTaskAssignees.includes(profile.id);
-                        return (
-                          <button
-                            key={profile.id}
-                            type="button"
-                            onClick={() => {
-                              setNewTaskAssignees(prev => 
-                                isSelected ? prev.filter(id => id !== profile.id) : [...prev, profile.id]
-                              );
-                            }}
-                            className={cn(
-                              "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
-                              isSelected 
-                                ? "bg-emerald-500 text-white border-emerald-500" 
-                                : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
-                            )}
-                          >
-                            {profile.email?.split('@')[0]} {profile.id === user.id ? '(You)' : ''}
-                          </button>
-                        );
-                      })}
+                      {profiles
+                        .filter(profile => profile.id !== user.id)
+                        .map((profile) => {
+                          const isSelected = newTaskAssignees.includes(profile.id);
+                          return (
+                            <button
+                              key={profile.id}
+                              type="button"
+                              onClick={() => {
+                                setNewTaskAssignees(prev => 
+                                  isSelected ? prev.filter(id => id !== profile.id) : [...prev, profile.id]
+                                );
+                              }}
+                              className={cn(
+                                "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
+                                isSelected 
+                                  ? "bg-emerald-500 text-white border-emerald-500" 
+                                  : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
+                              )}
+                            >
+                              {profile.email?.split('@')[0]}
+                            </button>
+                          );
+                        })}
                     </div>
                   </div>
                   <div className="flex gap-3 pt-2">
