@@ -20,6 +20,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const tasksRef = React.useRef<Task[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPersonnel, setShowPersonnel] = useState(false);
@@ -40,11 +41,48 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
     // Poll for online users every 20 seconds
     const pollInterval = setInterval(fetchProfilesOnly, 20000);
     
+    // Poll for tasks every 15 seconds
+    const taskPollInterval = setInterval(fetchTasksOnly, 15000);
+    
     return () => {
       clearInterval(interval);
       clearInterval(pollInterval);
+      clearInterval(taskPollInterval);
     };
   }, []);
+
+  const fetchTasksOnly = async () => {
+    try {
+      const { data, error } = await supabase.from('tasks').select(`
+        *,
+        task_assignees (
+          user_id
+        )
+      `);
+      if (error) throw error;
+      
+      const allTasks = (data || []) as any[];
+      const relatedTasks = allTasks.filter(task => 
+        task && (
+          task.user_id === user.id || 
+          (Array.isArray(task.task_assignees) && task.task_assignees.some((a: any) => a.user_id === user.id))
+        )
+      );
+
+      // Detect new tasks
+      const newTasks = relatedTasks.filter(newTask => !tasksRef.current.some(oldTask => oldTask.id === newTask.id));
+      if (newTasks.length > 0) {
+        newTasks.forEach(task => {
+          showDbNotification(`Công việc mới được giao: ${task.title}`, 'info');
+        });
+      }
+
+      setTasks(relatedTasks);
+      tasksRef.current = relatedTasks;
+    } catch (err: any) {
+      console.error('Error polling tasks:', err);
+    }
+  };
 
   const fetchProfilesOnly = async () => {
     try {
@@ -108,6 +146,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
       );
 
       setTasks(relatedTasks);
+      tasksRef.current = relatedTasks;
       setProfiles(profilesRes.data || []);
     } catch (err: any) {
       console.error('Error fetching dashboard data:', err);
