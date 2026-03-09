@@ -101,7 +101,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
 
     // Subscribe to real-time changes
     const channel = supabase
-      .channel('tasks-changes')
+      .channel('db-changes')
       .on(
         'postgres_changes',
         {
@@ -109,9 +109,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
           schema: 'public',
           table: 'tasks',
         },
-        async (payload) => {
+        (payload) => {
           console.log('Realtime task change received:', payload);
-          // Always refetch to get joined data (assignees)
           fetchTasks();
         }
       )
@@ -127,7 +126,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
           fetchTasks(); 
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -413,7 +414,16 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
             <Plus className="w-4 h-4" /> New Task
           </button>
           <button
-            onClick={() => supabase.auth.signOut()}
+            onClick={async () => {
+              try {
+                await supabase.auth.signOut();
+              } catch (err) {
+                console.error('Logout error:', err);
+              } finally {
+                // Force reload to clear state and redirect to login
+                window.location.href = '/';
+              }
+            }}
             className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
             title="Sign Out"
           >
