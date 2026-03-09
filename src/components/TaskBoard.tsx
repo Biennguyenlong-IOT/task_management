@@ -5,7 +5,7 @@ import { Task, TaskStatus, UserProfile } from '../types';
 import { TaskCard } from './TaskCard';
 import { SortableTaskCard } from './SortableTaskCard';
 import { TaskDetailModal } from './TaskDetailModal';
-import { Plus, LogOut, LayoutGrid, List, CheckCircle2, Clock, PlayCircle, Search, GripVertical } from 'lucide-react';
+import { Plus, LogOut, LayoutGrid, List, CheckCircle2, Clock, PlayCircle, Search, GripVertical, BarChart3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import {
@@ -31,6 +31,7 @@ import {
 
 interface TaskBoardProps {
   user: User;
+  onGoToDashboard: () => void;
 }
 
 interface DroppableColumnProps {
@@ -53,7 +54,7 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, children }) => {
   );
 };
 
-export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
+export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
@@ -322,47 +323,65 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
     if (!over) return;
 
     const activeId = active.id;
-    const task = tasks.find((t) => t.id === activeId);
+    const overId = over.id;
     
-    if (task) {
-      // Calculate new position based on neighbors in the current state
-      const newIndex = tasks.findIndex(t => t.id === activeId);
-      const prevTask = tasks[newIndex - 1];
-      const nextTask = tasks[newIndex + 1];
+    // Find the task in the current state
+    const task = tasks.find((t) => t.id === activeId);
+    if (!task) return;
 
-      let newPosition = task.position || 0;
+    // Determine the new status
+    // If dropped over a column, overId is the status
+    // If dropped over another task, use that task's status
+    let newStatus = task.status;
+    const overTask = tasks.find(t => t.id === overId);
+    
+    if (['todo', 'in-progress', 'done'].includes(overId as string)) {
+      newStatus = overId as TaskStatus;
+    } else if (overTask) {
+      newStatus = overTask.status;
+    }
 
-      if (!prevTask && !nextTask) {
-        newPosition = 1000;
-      } else if (!prevTask) {
-        newPosition = (nextTask.position || 0) / 2;
-      } else if (!nextTask) {
-        newPosition = (prevTask.position || 0) + 1000;
+    // Calculate new position
+    const newIndex = tasks.findIndex(t => t.id === activeId);
+    const prevTask = tasks[newIndex - 1];
+    const nextTask = tasks[newIndex + 1];
+
+    let newPosition = task.position || 0;
+    if (!prevTask && !nextTask) {
+      newPosition = 1000;
+    } else if (!prevTask) {
+      newPosition = (nextTask.position || 0) / 2;
+    } else if (!nextTask) {
+      newPosition = (prevTask.position || 0) + 1000;
+    } else {
+      newPosition = ((prevTask.position || 0) + (nextTask.position || 0)) / 2;
+    }
+
+    console.log(`Updating task ${activeId} to status ${newStatus} at position ${newPosition}`);
+
+    try {
+      const { error, data } = await supabase
+        .from('tasks')
+        .update({ 
+          status: newStatus,
+          position: newPosition 
+        })
+        .eq('id', activeId)
+        .select();
+
+      if (error) {
+        console.error('Database update failed:', error);
+        alert('Lỗi: ' + (error.message || 'Bạn không có quyền cập nhật task này.'));
+        fetchTasks(); // Revert UI
       } else {
-        newPosition = ((prevTask.position || 0) + (nextTask.position || 0)) / 2;
+        console.log('Database update successful:', data);
+        // Local state is already updated by handleDragOver, 
+        // but we ensure position is synced
+        setTasks(prev => prev.map(t => t.id === activeId ? { ...t, status: newStatus, position: newPosition } : t));
       }
-
-      try {
-        const { error } = await supabase
-          .from('tasks')
-          .update({ 
-            status: task.status,
-            position: newPosition 
-          })
-          .eq('id', task.id);
-
-        if (error) {
-          console.error('Database update failed:', error);
-          alert('Bạn không có quyền chuyển task này. Chỉ chủ task hoặc người được gán mới có quyền.');
-          fetchTasks(); // Revert UI
-        } else {
-          // Update local state with final position
-          setTasks(prev => prev.map(t => t.id === task.id ? { ...t, position: newPosition } : t));
-        }
-      } catch (err) {
-        console.error('Error in handleDragEnd:', err);
-        await updateTaskStatus(task.id, task.status);
-      }
+    } catch (err) {
+      console.error('Error in handleDragEnd:', err);
+      fetchTasks();
     }
   };
 
@@ -381,15 +400,26 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-12">
-        <div>
-          <h1 className="text-3xl font-serif font-medium text-stone-900">My Workspace</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-stone-500">Chào, <span className="text-emerald-600 font-medium">{user.email}</span></p>
-            <span className="w-1 h-1 rounded-full bg-stone-300" />
-            <p className="text-stone-400 text-sm">Manage your tasks and stay productive.</p>
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 font-medium text-lg">
+            {user.email?.[0].toUpperCase()}
+          </div>
+          <div>
+            <h1 className="text-3xl font-serif font-medium text-stone-900">My Workspace</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-stone-500">Chào, <span className="text-emerald-600 font-medium">{user.email}</span></p>
+              <span className="w-1 h-1 rounded-full bg-stone-300" />
+              <p className="text-stone-400 text-sm">Quản lý công việc và năng suất.</p>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={onGoToDashboard}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:bg-stone-50 transition-all font-medium shadow-sm"
+          >
+            <BarChart3 className="w-4 h-4" /> Trang thống kê
+          </button>
           <button
             onClick={() => fetchTasks()}
             className="p-2 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"

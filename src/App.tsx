@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import { Auth } from './components/Auth';
 import { TaskBoard } from './components/TaskBoard';
+import { Dashboard } from './components/Dashboard';
 import { ConfigRequired } from './components/ConfigRequired';
 import { User } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
@@ -10,6 +11,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [configMissing, setConfigMissing] = useState(false);
+  const [view, setView] = useState<'board' | 'dashboard'>('dashboard');
 
   useEffect(() => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -53,7 +55,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#f5f5f0]">
       {user ? (
-        <TaskBoard user={user} />
+        view === 'board' ? (
+          <TaskBoard user={user} onGoToDashboard={() => setView('dashboard')} />
+        ) : (
+          <Dashboard onBack={() => setView('board')} user={user} />
+        )
       ) : (
         <Auth />
       )}
