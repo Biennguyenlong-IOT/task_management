@@ -90,7 +90,12 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
         // Profile not found, create it
         console.log('Creating missing profile for user:', user.email);
         await supabase.from('profiles').insert([
-          { id: user.id, email: user.email, display_name: user.email?.split('@')[0] }
+          { 
+            id: user.id, 
+            email: user.email, 
+            display_name: user.email?.split('@')[0],
+            last_seen: new Date().toISOString()
+          }
         ]);
         fetchProfiles();
       }
@@ -101,7 +106,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
     fetchProfiles();
     updateLastSeen();
 
-    const lastSeenInterval = setInterval(updateLastSeen, 60000);
+    const lastSeenInterval = setInterval(updateLastSeen, 30000);
 
     // Subscribe to real-time changes
     const channel = supabase
@@ -462,17 +467,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
             onClick={async () => {
               try {
                 await supabase.auth.signOut();
+                window.location.href = '/';
               } catch (err) {
                 console.error('Logout error:', err);
-              } finally {
-                // Force reload to clear state and redirect to login
-                window.location.href = '/';
               }
             }}
-            className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-            title="Sign Out"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-red-100 text-red-600 rounded-xl font-medium hover:bg-red-50 transition-all shadow-sm"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4" /> Đăng xuất
           </button>
         </div>
       </header>

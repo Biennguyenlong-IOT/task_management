@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import { 
   TrendingUp, CheckCircle2, Clock, PlayCircle, Users, 
-  ArrowLeft, BarChart3, PieChart as PieChartIcon, Activity, LayoutGrid, X, Circle
+  ArrowLeft, BarChart3, PieChart as PieChartIcon, Activity, LayoutGrid, X, Circle, LogOut, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -29,11 +29,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
     fetchData();
     updateLastSeen();
     
-    // Update last seen every minute
-    const interval = setInterval(updateLastSeen, 60000);
+    // Update last seen every 30 seconds
+    const interval = setInterval(updateLastSeen, 30000);
     
-    // Poll for online users every 30 seconds
-    const pollInterval = setInterval(fetchProfilesOnly, 30000);
+    // Poll for online users every 20 seconds
+    const pollInterval = setInterval(fetchProfilesOnly, 20000);
     
     return () => {
       clearInterval(interval);
@@ -48,7 +48,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
         const currentOnline = data.filter(p => 
           p.id !== user.id && 
           p.last_seen && 
-          (new Date().getTime() - new Date(p.last_seen).getTime() < 300000)
+          (new Date().getTime() - new Date(p.last_seen).getTime() < 120000)
         ).map(p => p.id);
         
         const newOnlineIds = currentOnline.filter(id => !onlineUsers.has(id));
@@ -167,9 +167,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
           </button>
           <button 
             onClick={fetchData}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:bg-stone-50 transition-all"
+            className="p-2 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+            title="Tải lại dữ liệu"
           >
-            <TrendingUp className="w-4 h-4" /> Làm mới
+            <RefreshCw className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={async () => {
+              try {
+                await supabase.auth.signOut();
+                window.location.href = '/';
+              } catch (err) {
+                console.error('Logout error:', err);
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-red-100 text-red-600 rounded-xl font-medium hover:bg-red-50 transition-all shadow-sm"
+          >
+            <LogOut className="w-4 h-4" /> Đăng xuất
           </button>
         </div>
       </div>
@@ -262,18 +276,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
                     <p className="text-sm text-stone-500">Thành viên tham gia dự án</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setShowPersonnel(false)}
-                  className="p-2 hover:bg-stone-200 rounded-full transition-colors text-stone-400 hover:text-stone-600"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={fetchProfilesOnly}
+                    className="p-2 hover:bg-stone-200 rounded-full transition-colors text-stone-400 hover:text-stone-600"
+                    title="Cập nhật trạng thái"
+                  >
+                    <RefreshCw className="w-5 h-5" />
+                  </button>
+                  <button 
+                    onClick={() => setShowPersonnel(false)}
+                    className="p-2 hover:bg-stone-200 rounded-full transition-colors text-stone-400 hover:text-stone-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
               
               <div className="p-6 max-h-[60vh] overflow-y-auto">
                 <div className="grid grid-cols-1 gap-4">
                   {profiles.map((profile) => {
-                    const isOnline = profile.last_seen && (new Date().getTime() - new Date(profile.last_seen).getTime() < 300000);
+                    const lastSeenDate = profile.last_seen ? new Date(profile.last_seen) : null;
+                    const isOnline = lastSeenDate && (new Date().getTime() - lastSeenDate.getTime() < 120000);
                     const userTasks = tasks.filter(t => t.task_assignees?.some(a => a.user_id === profile.id));
                     const completedTasks = userTasks.filter(t => t.status === 'done').length;
                     
@@ -291,9 +315,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
                           <div>
                             <div className="flex items-center gap-2">
                               <h3 className="font-medium text-stone-900">{profile.display_name || profile.email.split('@')[0]}</h3>
-                              {isOnline && <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-1.5 py-0.5 rounded">Online</span>}
+                              {isOnline ? (
+                                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-1.5 py-0.5 rounded">Online</span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest bg-stone-50 px-1.5 py-0.5 rounded">Offline</span>
+                              )}
                             </div>
                             <p className="text-xs text-stone-500">{profile.email}</p>
+                            {lastSeenDate && !isOnline && (
+                              <p className="text-[10px] text-stone-400 mt-0.5">
+                                Hoạt động: {lastSeenDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} {lastSeenDate.toLocaleDateString()}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="text-right">
