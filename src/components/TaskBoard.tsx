@@ -76,6 +76,26 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
   );
 
   useEffect(() => {
+    const ensureProfile = async () => {
+      if (!user) return;
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+        
+      if (error && (error.code === 'PGRST116' || error.message.includes('JSON object requested'))) {
+        // Profile not found, create it
+        console.log('Creating missing profile for user:', user.email);
+        await supabase.from('profiles').insert([
+          { id: user.id, email: user.email, display_name: user.email?.split('@')[0] }
+        ]);
+        fetchProfiles();
+      }
+    };
+
+    ensureProfile();
     fetchTasks();
     fetchProfiles();
 
@@ -120,7 +140,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
         .from('tasks')
         .select(`
           *,
-          task_assignees (user_id)
+          task_assignees (
+            user_id,
+            profiles (email)
+          )
         `)
         .order('position', { ascending: true })
         .order('created_at', { ascending: false });
@@ -131,7 +154,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user }) => {
           .from('tasks')
           .select(`
             *,
-            task_assignees (user_id)
+            task_assignees (
+              user_id,
+              profiles (email)
+            )
           `)
           .order('created_at', { ascending: false });
         

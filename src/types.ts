@@ -8,7 +8,10 @@ export interface Task {
   created_at: string;
   user_id: string;
   assigned_to: string | null;
-  task_assignees?: { user_id: string }[];
+  task_assignees?: { 
+    user_id: string;
+    profiles?: { email: string };
+  }[];
   position?: number;
 }
 

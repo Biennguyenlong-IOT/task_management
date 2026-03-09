@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task, TaskStatus, UserProfile } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Calendar, Clock, PlayCircle, CheckCircle2, MessageSquare, User as UserIcon, Loader2 } from 'lucide-react';
+import { X, Calendar, Clock, PlayCircle, CheckCircle2, MessageSquare, User as UserIcon, Loader2, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { TaskComments } from './TaskComments';
 import { cn } from '../lib/utils';
@@ -156,38 +156,64 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
             <div>
               <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">Nhóm thực hiện</h3>
-              <div className="space-y-2 max-h-[150px] overflow-y-auto pr-2 scrollbar-hide">
-                {profiles
-                  .map((profile) => {
-                    const isAssigned = currentAssignees.includes(profile.id);
-                    const isMe = profile.id === userId;
-                    return (
-                      <button
-                        key={profile.id}
-                        disabled={updatingAssignee || task.user_id !== userId}
-                        onClick={() => toggleAssignee(profile.id)}
-                        className={cn(
-                          "w-full flex items-center justify-between px-4 py-2.5 rounded-xl border transition-all text-sm",
-                          isAssigned 
-                            ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
-                            : "bg-white border-stone-200 text-stone-600 hover:border-stone-300"
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className={cn(
-                            "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
-                            isAssigned ? "bg-emerald-500 text-white" : "bg-stone-100 text-stone-400"
-                          )}>
-                            {profile.email?.charAt(0).toUpperCase()}
+              <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-hide">
+                {/* Assigned Members */}
+                <div className="space-y-2">
+                  {profiles
+                    .filter(p => currentAssignees.includes(p.id))
+                    .map((profile) => {
+                      const isMe = profile.id === userId;
+                      return (
+                        <div
+                          key={profile.id}
+                          className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold">
+                              {profile.email?.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="truncate max-w-[180px]">
+                              {profile.email} {isMe && "(Bạn)"}
+                            </span>
                           </div>
-                          <span className="truncate max-w-[180px]">
-                            {profile.email} {isMe && "(Bạn)"}
-                          </span>
+                          {task.user_id === userId && (
+                            <button 
+                              disabled={updatingAssignee}
+                              onClick={() => toggleAssignee(profile.id)}
+                              className="p-1 hover:bg-emerald-100 rounded-lg text-emerald-600 transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
-                        {isAssigned && <CheckCircle2 className="w-4 h-4" />}
-                      </button>
-                    );
-                  })}
+                      );
+                    })}
+                </div>
+
+                {/* Add Member Section (Owner only) */}
+                {task.user_id === userId && (
+                  <div className="mt-6">
+                    <h4 className="text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-2">Thêm thành viên</h4>
+                    <div className="space-y-1">
+                      {profiles
+                        .filter(p => !currentAssignees.includes(p.id))
+                        .map((profile) => (
+                          <button
+                            key={profile.id}
+                            disabled={updatingAssignee}
+                            onClick={() => toggleAssignee(profile.id)}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-stone-50 text-stone-600 text-xs transition-colors border border-transparent hover:border-stone-100"
+                          >
+                            <div className="w-5 h-5 rounded-full bg-stone-100 text-stone-400 flex items-center justify-center text-[9px] font-bold">
+                              {profile.email?.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="truncate">{profile.email}</span>
+                            <Plus className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100" />
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
               {task.user_id !== userId && (
                 <p className="text-[10px] text-stone-400 mt-2 italic">

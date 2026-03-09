@@ -126,10 +126,26 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, currentUserId, onDelet
             {format(new Date(task.created_at), 'MMM d, yyyy')}
           </span>
         </div>
-        <div className="flex -space-x-2">
-          <div className="w-6 h-6 rounded-full bg-stone-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-stone-400">
-            {task.user_id.slice(0, 2).toUpperCase()}
-          </div>
+        <div className="flex -space-x-2 overflow-hidden">
+          {task.task_assignees?.slice(0, 3).map((assignee, i) => (
+            <div 
+              key={i}
+              className="w-6 h-6 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center text-[8px] font-bold text-white shrink-0"
+              title={assignee.profiles?.email || assignee.user_id}
+            >
+              {(assignee.profiles?.email || 'U').charAt(0).toUpperCase()}
+            </div>
+          ))}
+          {task.task_assignees && task.task_assignees.length > 3 && (
+            <div className="w-6 h-6 rounded-full bg-stone-100 border-2 border-white flex items-center justify-center text-[8px] font-bold text-stone-400 shrink-0">
+              +{task.task_assignees.length - 3}
+            </div>
+          )}
+          {(!task.task_assignees || task.task_assignees.length === 0) && (
+            <div className="w-6 h-6 rounded-full bg-stone-50 border-2 border-white flex items-center justify-center text-[8px] font-bold text-stone-300 shrink-0">
+              ?
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

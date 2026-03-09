@@ -38,7 +38,7 @@ export const Auth: React.FC = () => {
         }
       } else if (mode === 'forgot_password') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin,
+          redirectTo: 'https://task-management-biennguyen.vercel.app',
         });
         if (error) throw error;
         setMessage({ type: 'success', text: 'Liên kết đặt lại mật khẩu đã được gửi vào email của bạn!' });
