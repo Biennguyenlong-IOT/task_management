@@ -7,11 +7,13 @@ import {
   PieChart, Pie, Cell, Legend 
 } from 'recharts';
 import { 
-  TrendingUp, CheckCircle2, Clock, PlayCircle, Users, 
-  ArrowLeft, BarChart3, PieChart as PieChartIcon, Activity, LayoutGrid, X, Circle, LogOut, RefreshCw
+  TrendingUp, CheckCircle2, Clock as ClockIcon, PlayCircle, Users, 
+  ArrowLeft, BarChart3, PieChart as PieChartIcon, Activity, LayoutGrid, X, Circle, LogOut, RefreshCw, Calendar as CalendarIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Notification, NotificationType } from './Notification';
+import { Clock } from './Clock';
+import { Calendar } from './Calendar';
 
 interface DashboardProps {
   onBack: () => void;
@@ -236,6 +238,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
             <LogOut className="w-4 h-4" /> Đăng xuất
           </button>
         </div>
+      </div>
+
+      {/* Time and Calendar */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <Clock />
+        <Calendar />
       </div>
 
       {/* Summary Cards */}
