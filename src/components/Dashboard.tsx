@@ -24,7 +24,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
   const [loading, setLoading] = useState(true);
   const [showPersonnel, setShowPersonnel] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
-  const [notification, setNotification] = useState<string | null>(null);
   const [dbNotification, setDbNotification] = useState<{ message: string, type: NotificationType } | null>(null);
 
   const showDbNotification = (message: string, type: NotificationType = 'info') => {
@@ -56,15 +55,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
           p.last_seen && 
           (new Date().getTime() - new Date(p.last_seen).getTime() < 120000)
         ).map(p => p.id);
-        
-        const newOnlineIds = currentOnline.filter(id => !onlineUsers.has(id));
-        if (newOnlineIds.length > 0) {
-          const newUser = data.find(p => p.id === newOnlineIds[0]);
-          if (newUser) {
-            setNotification(`${newUser.display_name || newUser.email.split('@')[0]} vừa online`);
-            setTimeout(() => setNotification(null), 5000);
-          }
-        }
         
         setOnlineUsers(new Set(currentOnline));
         setProfiles(data);
@@ -174,19 +164,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <AnimatePresence>
-            {notification && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="bg-emerald-500 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium"
-              >
-                <Circle className="w-2 h-2 fill-white animate-pulse" />
-                {notification}
-              </motion.div>
-            )}
-          </AnimatePresence>
           <button 
             onClick={onBack}
             className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-all shadow-sm"
@@ -285,8 +262,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
             </div>
             <span className="text-xs font-medium text-stone-400 uppercase tracking-wider">Nhân Sự</span>
           </div>
-          <div className="text-3xl font-serif font-medium text-stone-900">{profiles.length}</div>
-          <p className="text-sm text-stone-500 mt-1">Thành viên trong nhóm (Click để xem)</p>
+          <div className="text-3xl font-serif font-medium text-stone-900">{onlineUsers.size}</div>
+          <p className="text-sm text-stone-500 mt-1">Nhân sự đang online (Click để xem)</p>
         </motion.div>
       </div>
 
