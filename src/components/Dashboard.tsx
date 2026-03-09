@@ -8,9 +8,9 @@ import {
 } from 'recharts';
 import { 
   TrendingUp, CheckCircle2, Clock, PlayCircle, Users, 
-  ArrowLeft, BarChart3, PieChart as PieChartIcon, Activity, LayoutGrid
+  ArrowLeft, BarChart3, PieChart as PieChartIcon, Activity, LayoutGrid, X, Circle
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface DashboardProps {
   onBack: () => void;
@@ -21,10 +21,63 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showPersonnel, setShowPersonnel] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [notification, setNotification] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
+    updateLastSeen();
+    
+    // Update last seen every minute
+    const interval = setInterval(updateLastSeen, 60000);
+    
+    // Poll for online users every 30 seconds
+    const pollInterval = setInterval(fetchProfilesOnly, 30000);
+    
+    return () => {
+      clearInterval(interval);
+      clearInterval(pollInterval);
+    };
   }, []);
+
+  const fetchProfilesOnly = async () => {
+    try {
+      const { data } = await supabase.from('profiles').select('*');
+      if (data) {
+        const currentOnline = data.filter(p => 
+          p.id !== user.id && 
+          p.last_seen && 
+          (new Date().getTime() - new Date(p.last_seen).getTime() < 300000)
+        ).map(p => p.id);
+        
+        const newOnlineIds = currentOnline.filter(id => !onlineUsers.has(id));
+        if (newOnlineIds.length > 0) {
+          const newUser = data.find(p => p.id === newOnlineIds[0]);
+          if (newUser) {
+            setNotification(`${newUser.display_name || newUser.email.split('@')[0]} vừa online`);
+            setTimeout(() => setNotification(null), 5000);
+          }
+        }
+        
+        setOnlineUsers(new Set(currentOnline));
+        setProfiles(data);
+      }
+    } catch (err) {
+      console.error('Error polling profiles:', err);
+    }
+  };
+
+  const updateLastSeen = async () => {
+    try {
+      await supabase
+        .from('profiles')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', user.id);
+    } catch (err) {
+      console.error('Error updating last seen:', err);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -93,6 +146,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <AnimatePresence>
+            {notification && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="bg-emerald-500 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium"
+              >
+                <Circle className="w-2 h-2 fill-white animate-pulse" />
+                {notification}
+              </motion.div>
+            )}
+          </AnimatePresence>
           <button 
             onClick={onBack}
             className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-all shadow-sm"
@@ -145,34 +211,113 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm"
+          onClick={onBack}
+          className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm cursor-pointer hover:border-amber-200 hover:shadow-md transition-all group"
         >
           <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-amber-50 rounded-lg">
+            <div className="p-2 bg-amber-50 rounded-lg group-hover:bg-amber-100 transition-colors">
               <PlayCircle className="w-5 h-5 text-amber-600" />
             </div>
             <span className="text-xs font-medium text-amber-600 uppercase tracking-wider">Đang Làm</span>
           </div>
           <div className="text-3xl font-serif font-medium text-stone-900">{inProgressTasks}</div>
-          <p className="text-sm text-stone-500 mt-1">Cần tập trung xử lý</p>
+          <p className="text-sm text-stone-500 mt-1">Cần tập trung xử lý (Click để xem)</p>
         </motion.div>
 
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm"
+          onClick={() => setShowPersonnel(true)}
+          className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm cursor-pointer hover:border-stone-400 hover:shadow-md transition-all group"
         >
           <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-stone-100 rounded-lg">
+            <div className="p-2 bg-stone-100 rounded-lg group-hover:bg-stone-200 transition-colors">
               <Users className="w-5 h-5 text-stone-600" />
             </div>
             <span className="text-xs font-medium text-stone-400 uppercase tracking-wider">Nhân Sự</span>
           </div>
           <div className="text-3xl font-serif font-medium text-stone-900">{profiles.length}</div>
-          <p className="text-sm text-stone-500 mt-1">Thành viên trong nhóm</p>
+          <p className="text-sm text-stone-500 mt-1">Thành viên trong nhóm (Click để xem)</p>
         </motion.div>
       </div>
+
+      {/* Personnel Modal */}
+      <AnimatePresence>
+        {showPersonnel && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-stone-900 text-white rounded-xl">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-serif font-medium text-stone-900">Danh Sách Nhân Sự</h2>
+                    <p className="text-sm text-stone-500">Thành viên tham gia dự án</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowPersonnel(false)}
+                  className="p-2 hover:bg-stone-200 rounded-full transition-colors text-stone-400 hover:text-stone-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="p-6 max-h-[60vh] overflow-y-auto">
+                <div className="grid grid-cols-1 gap-4">
+                  {profiles.map((profile) => {
+                    const isOnline = profile.last_seen && (new Date().getTime() - new Date(profile.last_seen).getTime() < 300000);
+                    const userTasks = tasks.filter(t => t.task_assignees?.some(a => a.user_id === profile.id));
+                    const completedTasks = userTasks.filter(t => t.status === 'done').length;
+                    
+                    return (
+                      <div key={profile.id} className="flex items-center justify-between p-4 rounded-2xl border border-stone-100 hover:bg-stone-50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="relative">
+                            <div className="w-12 h-12 bg-stone-100 rounded-full flex items-center justify-center text-stone-600 font-medium text-lg border-2 border-white shadow-sm">
+                              {profile.display_name?.[0] || profile.email[0].toUpperCase()}
+                            </div>
+                            {isOnline && (
+                              <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full shadow-sm animate-pulse" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium text-stone-900">{profile.display_name || profile.email.split('@')[0]}</h3>
+                              {isOnline && <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-1.5 py-0.5 rounded">Online</span>}
+                            </div>
+                            <p className="text-xs text-stone-500">{profile.email}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-medium text-stone-900">{completedTasks}/{userTasks.length} Task</div>
+                          <p className="text-[10px] text-stone-400 uppercase tracking-wider">Hoàn thành</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              
+              <div className="p-6 bg-stone-50 border-t border-stone-100 flex justify-end">
+                <button 
+                  onClick={() => setShowPersonnel(false)}
+                  className="px-6 py-2 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-all shadow-sm"
+                >
+                  Đóng
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Status Distribution */}

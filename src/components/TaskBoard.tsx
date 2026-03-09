@@ -99,6 +99,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
     ensureProfile();
     fetchTasks();
     fetchProfiles();
+    updateLastSeen();
+
+    const lastSeenInterval = setInterval(updateLastSeen, 60000);
 
     // Subscribe to real-time changes
     const channel = supabase
@@ -133,8 +136,20 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
 
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(lastSeenInterval);
     };
   }, [user.id]);
+
+  const updateLastSeen = async () => {
+    try {
+      await supabase
+        .from('profiles')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', user.id);
+    } catch (err) {
+      console.error('Error updating last seen:', err);
+    }
+  };
 
   const fetchTasks = async () => {
     try {

@@ -28,4 +28,5 @@ export interface UserProfile {
   id: string;
   email: string;
   display_name: string | null;
+  last_seen?: string | null;
 }
