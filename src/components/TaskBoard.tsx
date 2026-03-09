@@ -54,6 +54,8 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, children }) => {
   );
 };
 
+import { Notification, NotificationType } from './Notification';
+
 export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
@@ -64,6 +66,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
   const [newTaskAssignees, setNewTaskAssignees] = useState<string[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
+
+  const showNotification = (message: string, type: NotificationType = 'info') => {
+    setNotification({ message, type });
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -157,6 +164,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
           return;
         }
         console.error('Error updating last seen:', error);
+        showNotification('Lỗi cập nhật trạng thái online: ' + error.message, 'error');
       }
     } catch (err) {
       console.error('Unexpected error updating last seen:', err);
@@ -207,8 +215,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
         );
         setTasks(relatedData);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching tasks:', err);
+      showNotification('Không thể tải danh sách công việc: ' + (err.message || 'Lỗi kết nối'), 'error');
     } finally {
       setLoading(false);
     }
@@ -221,8 +230,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
         .select('id, email, display_name');
       if (error) throw error;
       setProfiles(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching profiles:', err);
+      showNotification('Không thể tải danh sách nhân sự: ' + (err.message || 'Lỗi kết nối'), 'error');
     }
   };
 
@@ -258,7 +268,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
         const { error: assigneeError } = await supabase.from('task_assignees').insert(assigneeData);
         if (assigneeError) {
           console.error('Error assigning users:', assigneeError);
-          alert('Task đã được tạo nhưng không thể gán người thực hiện: ' + assigneeError.message);
+          showNotification('Task đã được tạo nhưng không thể gán người thực hiện: ' + assigneeError.message, 'error');
         }
       }
 
@@ -266,9 +276,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
       setNewTaskAssignees([]);
       setIsModalOpen(false);
       fetchTasks();
+      showNotification('Đã tạo task mới thành công', 'success');
     } catch (err: any) {
       console.error('Error creating task:', err);
-      alert('Không thể tạo task: ' + (err.message || 'Lỗi không xác định'));
+      showNotification('Không thể tạo task: ' + (err.message || 'Lỗi không xác định'), 'error');
     }
   };
 
@@ -282,7 +293,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
       if (error) throw error;
     } catch (err: any) {
       console.error('Error updating task:', err);
-      alert('Không thể thay đổi trạng thái: ' + (err.message || 'Bạn không có quyền thực hiện thao tác này'));
+      showNotification('Không thể thay đổi trạng thái: ' + (err.message || 'Bạn không có quyền thực hiện thao tác này'), 'error');
       fetchTasks(); // Revert UI state
     }
   };
@@ -297,8 +308,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
       if (error) {
         // Rollback on error
         setTasks(previousTasks);
+        showNotification('Không thể xóa task: ' + error.message, 'error');
         throw error;
       }
+      showNotification('Đã xóa task thành công', 'success');
     } catch (err) {
       console.error('Error deleting task:', err);
     }
@@ -410,10 +423,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
 
       if (error) {
         console.error('Database update failed:', error);
-        alert('Lỗi: ' + (error.message || 'Bạn không có quyền cập nhật task này.'));
+        showNotification(error.message || 'Bạn không có quyền cập nhật task này.', 'error');
         fetchTasks(); // Revert UI
       } else {
         console.log('Database update successful:', data);
+        showNotification('Đã cập nhật trạng thái task', 'success');
         // Local state is already updated by handleDragOver, 
         // but we ensure position is synced
         setTasks(prev => prev.map(t => t.id === activeId ? { ...t, status: newStatus, position: newPosition } : t));
@@ -682,6 +696,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
           </div>
         )}
       </AnimatePresence>
+      <Notification 
+        message={notification?.message || null} 
+        type={notification?.type || 'info'} 
+        onClose={() => setNotification(null)} 
+      />
     </div>
   );
 };

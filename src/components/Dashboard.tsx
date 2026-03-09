@@ -11,6 +11,7 @@ import {
   ArrowLeft, BarChart3, PieChart as PieChartIcon, Activity, LayoutGrid, X, Circle, LogOut, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Notification, NotificationType } from './Notification';
 
 interface DashboardProps {
   onBack: () => void;
@@ -24,6 +25,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
   const [showPersonnel, setShowPersonnel] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [notification, setNotification] = useState<string | null>(null);
+  const [dbNotification, setDbNotification] = useState<{ message: string, type: NotificationType } | null>(null);
+
+  const showDbNotification = (message: string, type: NotificationType = 'info') => {
+    setDbNotification({ message, type });
+  };
 
   useEffect(() => {
     fetchData();
@@ -63,8 +69,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
         setOnlineUsers(new Set(currentOnline));
         setProfiles(data);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error polling profiles:', err);
+      showDbNotification('Không thể tải danh sách nhân sự: ' + (err.message || 'Lỗi kết nối'), 'error');
     }
   };
 
@@ -79,6 +86,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
           return;
         }
         console.error('Error updating last seen:', error);
+        showDbNotification('Lỗi cập nhật trạng thái online: ' + error.message, 'error');
       }
     } catch (err) {
       console.error('Unexpected error updating last seen:', err);
@@ -111,8 +119,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
 
       setTasks(relatedTasks);
       setProfiles(profilesRes.data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching dashboard data:', err);
+      showDbNotification('Không thể tải dữ liệu: ' + (err.message || 'Lỗi kết nối'), 'error');
     } finally {
       setLoading(false);
     }
@@ -480,6 +489,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-800/20 rounded-full -mr-32 -mt-32 blur-3xl" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-400/10 rounded-full -ml-24 -mb-24 blur-2xl" />
       </motion.div>
+      <Notification 
+        message={dbNotification?.message || null} 
+        type={dbNotification?.type || 'info'} 
+        onClose={() => setDbNotification(null)} 
+      />
     </div>
   );
 };
