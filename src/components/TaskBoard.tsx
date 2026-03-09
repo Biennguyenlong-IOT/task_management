@@ -184,9 +184,17 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
           .order('created_at', { ascending: false });
         
         if (fallbackError) throw fallbackError;
-        setTasks(fallbackData as Task[]);
+        const relatedFallback = (fallbackData as Task[]).filter(task => 
+          task.user_id === user.id || 
+          task.task_assignees?.some(a => a.user_id === user.id)
+        );
+        setTasks(relatedFallback);
       } else {
-        setTasks(data as Task[]);
+        const relatedData = (data as Task[]).filter(task => 
+          task.user_id === user.id || 
+          task.task_assignees?.some(a => a.user_id === user.id)
+        );
+        setTasks(relatedData);
       }
     } catch (err) {
       console.error('Error fetching tasks:', err);

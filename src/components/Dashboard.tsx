@@ -90,7 +90,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
       if (tasksRes.error) throw tasksRes.error;
       if (profilesRes.error) throw profilesRes.error;
 
-      setTasks(tasksRes.data || []);
+      const allTasks = tasksRes.data || [];
+      const relatedTasks = allTasks.filter(task => 
+        task.user_id === user.id || 
+        task.task_assignees?.some((a: any) => a.user_id === user.id)
+      );
+
+      setTasks(relatedTasks);
       setProfiles(profilesRes.data || []);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
