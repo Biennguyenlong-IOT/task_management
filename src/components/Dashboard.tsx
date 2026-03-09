@@ -70,12 +70,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
 
   const updateLastSeen = async () => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('profiles')
         .update({ last_seen: new Date().toISOString() })
         .eq('id', user.id);
+      if (error) {
+        if (error.code === 'PGRST204' || error.message.includes('column "last_seen" does not exist')) {
+          return;
+        }
+        console.error('Error updating last seen:', error);
+      }
     } catch (err) {
-      console.error('Error updating last seen:', err);
+      console.error('Unexpected error updating last seen:', err);
     }
   };
 
@@ -83,17 +89,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
     try {
       setLoading(true);
       const [tasksRes, profilesRes] = await Promise.all([
-        supabase.from('tasks').select('*, task_assignees(user_id)'),
+        supabase.from('tasks').select(`
+          *,
+          task_assignees (
+            user_id
+          )
+        `),
         supabase.from('profiles').select('*')
       ]);
 
       if (tasksRes.error) throw tasksRes.error;
       if (profilesRes.error) throw profilesRes.error;
 
-      const allTasks = tasksRes.data || [];
+      const allTasks = (tasksRes.data || []) as any[];
       const relatedTasks = allTasks.filter(task => 
-        task.user_id === user.id || 
-        task.task_assignees?.some((a: any) => a.user_id === user.id)
+        task && (
+          task.user_id === user.id || 
+          (Array.isArray(task.task_assignees) && task.task_assignees.some((a: any) => a.user_id === user.id))
+        )
       );
 
       setTasks(relatedTasks);
@@ -182,9 +195,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
             onClick={async () => {
               try {
                 await supabase.auth.signOut();
-                window.location.href = '/';
               } catch (err) {
                 console.error('Logout error:', err);
+              } finally {
+                window.location.href = '/';
               }
             }}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-red-100 text-red-600 rounded-xl font-medium hover:bg-red-50 transition-all shadow-sm"

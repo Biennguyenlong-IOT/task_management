@@ -147,12 +147,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
 
   const updateLastSeen = async () => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('profiles')
         .update({ last_seen: new Date().toISOString() })
         .eq('id', user.id);
+      if (error) {
+        if (error.code === 'PGRST204' || error.message.includes('column "last_seen" does not exist')) {
+          // Silently fail if column doesn't exist yet
+          return;
+        }
+        console.error('Error updating last seen:', error);
+      }
     } catch (err) {
-      console.error('Error updating last seen:', err);
+      console.error('Unexpected error updating last seen:', err);
     }
   };
 
@@ -184,15 +191,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
           .order('created_at', { ascending: false });
         
         if (fallbackError) throw fallbackError;
-        const relatedFallback = (fallbackData as Task[]).filter(task => 
-          task.user_id === user.id || 
-          task.task_assignees?.some(a => a.user_id === user.id)
+        const relatedFallback = ((fallbackData || []) as Task[]).filter(task => 
+          task && (
+            task.user_id === user.id || 
+            (Array.isArray(task.task_assignees) && task.task_assignees.some(a => a.user_id === user.id))
+          )
         );
         setTasks(relatedFallback);
       } else {
-        const relatedData = (data as Task[]).filter(task => 
-          task.user_id === user.id || 
-          task.task_assignees?.some(a => a.user_id === user.id)
+        const relatedData = ((data || []) as Task[]).filter(task => 
+          task && (
+            task.user_id === user.id || 
+            (Array.isArray(task.task_assignees) && task.task_assignees.some(a => a.user_id === user.id))
+          )
         );
         setTasks(relatedData);
       }
@@ -475,9 +486,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
             onClick={async () => {
               try {
                 await supabase.auth.signOut();
-                window.location.href = '/';
               } catch (err) {
                 console.error('Logout error:', err);
+              } finally {
+                window.location.href = '/';
               }
             }}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-red-100 text-red-600 rounded-xl font-medium hover:bg-red-50 transition-all shadow-sm"
