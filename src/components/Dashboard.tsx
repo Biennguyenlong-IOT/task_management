@@ -73,7 +73,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
 
       // Detect new tasks
       const newTasks = relatedTasks.filter(newTask => !tasksRef.current.some(oldTask => oldTask.id === newTask.id));
-      if (newTasks.length > 0) {
+      if (newTasks.length > 0 && tasksRef.current.length > 0) {
         newTasks.forEach(task => {
           showDbNotification(`Công việc mới được giao: ${task.title}`, 'info');
         });
@@ -164,6 +164,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
   const inProgressTasks = tasks.filter(t => t.status === 'in-progress').length;
   const todoTasks = tasks.filter(t => t.status === 'todo').length;
   const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+  // Calculate tasks completed this week
+  const now = new Date();
+  const startOfWeekDate = new Date(now.setDate(now.getDate() - now.getDay()));
+  const tasksDoneThisWeek = tasks.filter(t => 
+    t.status === 'done' && 
+    t.completion_time && 
+    new Date(t.completion_time) >= startOfWeekDate
+  ).length;
+
+  // Productivity Score (0-100)
+  const productivityScore = Math.min(100, Math.round((completionRate * 0.7) + (tasksDoneThisWeek * 5)));
+
+  // Calculate average completion time
+  const completedTasksWithTimes = tasks.filter(t => t.status === 'done' && t.start_time && t.completion_time);
+  let averageCompletionTimeHours = 0;
+  if (completedTasksWithTimes.length > 0) {
+    const totalTimeMs = completedTasksWithTimes.reduce((acc, task) => {
+      const start = new Date(task.start_time!).getTime();
+      const end = new Date(task.completion_time!).getTime();
+      return acc + (end - start);
+    }, 0);
+    averageCompletionTimeHours = Math.round((totalTimeMs / completedTasksWithTimes.length) / (1000 * 60 * 60) * 10) / 10;
+  }
 
   // Data for Status Pie Chart
   const statusData = [
@@ -273,10 +297,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
             <div className="p-2 bg-emerald-50 rounded-lg">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             </div>
-            <span className="text-xs font-medium text-emerald-600 uppercase tracking-wider">Hoàn Thành</span>
+            <span className="text-xs font-medium text-emerald-600 uppercase tracking-wider">Tuần Này</span>
           </div>
-          <div className="text-3xl font-serif font-medium text-stone-900">{doneTasks}</div>
-          <p className="text-sm text-stone-500 mt-1">{completionRate}% tỷ lệ đáp ứng</p>
+          <div className="text-3xl font-serif font-medium text-stone-900">{tasksDoneThisWeek}</div>
+          <p className="text-sm text-stone-500 mt-1">Task đã xong trong tuần</p>
         </motion.div>
 
         <motion.div 
@@ -492,13 +516,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
         className="mt-8 bg-emerald-900 text-white p-8 rounded-3xl overflow-hidden relative"
       >
         <div className="relative z-10">
-          <h2 className="text-2xl font-serif font-medium mb-2">Chất Lượng Đáp Ứng</h2>
+          <h2 className="text-2xl font-serif font-medium mb-2">Chất Lượng & Hiệu Suất</h2>
           <p className="text-emerald-100/80 mb-6 max-w-md">
-            Dựa trên tỷ lệ hoàn thành công việc hiện tại của toàn bộ hệ thống.
+            Dựa trên tỷ lệ hoàn thành và thời gian xử lý trung bình của toàn bộ hệ thống.
           </p>
-          <div className="flex items-end gap-4">
-            <div className="text-6xl font-serif font-medium">{completionRate}%</div>
-            <div className="mb-2 text-emerald-200">Hiệu suất tổng thể</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="flex items-end gap-4">
+              <div className="text-6xl font-serif font-medium">{completionRate}%</div>
+              <div className="mb-2 text-emerald-200">Tỷ lệ hoàn thành</div>
+            </div>
+            <div className="flex items-end gap-4">
+              <div className="text-6xl font-serif font-medium">{averageCompletionTimeHours}h</div>
+              <div className="mb-2 text-emerald-200">Thời gian xử lý TB</div>
+            </div>
+            <div className="flex items-end gap-4">
+              <div className="text-6xl font-serif font-medium">{productivityScore}</div>
+              <div className="mb-2 text-emerald-200">Điểm năng suất</div>
+            </div>
           </div>
           <div className="mt-8 w-full bg-emerald-800/50 h-3 rounded-full overflow-hidden">
             <motion.div 

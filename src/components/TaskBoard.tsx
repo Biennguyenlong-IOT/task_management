@@ -253,7 +253,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
           status: 'todo',
           user_id: user.id,
           position: maxPos + 1000,
-          start_time: newTask.start_time ? formatISO(new Date(newTask.start_time)) : null,
+          start_time: newTask.start_time ? formatISO(parseISO(newTask.start_time)) : null,
         },
       ]).select();
 
@@ -496,6 +496,12 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
               <p className="text-stone-500">Chào, <span className="text-emerald-600 font-medium">{user.email}</span></p>
               <span className="w-1 h-1 rounded-full bg-stone-300" />
               <p className="text-stone-400 text-sm">Quản lý công việc và năng suất.</p>
+              {new Date().getTimezoneOffset() === 0 && (
+                <>
+                  <span className="w-1 h-1 rounded-full bg-stone-300" />
+                  <p className="text-amber-500 text-[10px] italic">Lưu ý: Trình duyệt đang ở múi giờ UTC. Thời gian có thể lệch so với giờ địa phương.</p>
+                </>
+              )}
             </div>
           </div>
         </div>
