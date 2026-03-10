@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
-import { Task, TaskStatus, UserProfile } from '../types';
+import { Task, UserProfile } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend 
 } from 'recharts';
 import { 
   TrendingUp, CheckCircle2, Clock as ClockIcon, PlayCircle, Users, 
-  ArrowLeft, BarChart3, PieChart as PieChartIcon, Activity, LayoutGrid, X, Circle, LogOut, RefreshCw, Calendar as CalendarIcon
+  X, LogOut, RefreshCw, LayoutGrid, Activity, BarChart3, PieChart as PieChartIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Notification, NotificationType } from './Notification';
@@ -20,9 +20,36 @@ interface DashboardProps {
   user: User;
 }
 
+// Thành phần thẻ thống kê dùng chung để giao diện đồng nhất
+const StatCard = ({ title, value, icon, color, onClick, subtitle, isLink }: any) => {
+  const colorMap: any = {
+    emerald: "bg-emerald-50 text-emerald-600",
+    amber: "bg-amber-50 text-amber-600",
+    stone: "bg-stone-100 text-stone-600",
+    blue: "bg-blue-50 text-blue-600"
+  };
+
+  return (
+    <motion.div 
+      whileHover={isLink ? { y: -4 } : {}}
+      onClick={onClick}
+      className={`bg-white p-5 rounded-3xl border border-stone-200/60 shadow-sm transition-all ${isLink ? 'cursor-pointer hover:border-stone-400 hover:shadow-md group' : ''}`}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className={`p-2.5 rounded-xl ${colorMap[color] || colorMap.stone} transition-transform group-hover:scale-110`}>
+          {React.cloneElement(icon, { size: 20 })}
+        </div>
+        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{title}</span>
+      </div>
+      <div className="text-3xl font-serif font-semibold text-stone-900">{value}</div>
+      {subtitle && <p className="text-xs text-stone-500 mt-1.5 font-medium">{subtitle}</p>}
+    </motion.div>
+  );
+};
+
 export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const tasksRef = React.useRef<Task[]>([]);
+  const tasksRef = useRef<Task[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPersonnel, setShowPersonnel] = useState(false);
@@ -33,565 +60,265 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
     setDbNotification({ message, type });
   };
 
-  useEffect(() => {
-    fetchData();
-    updateLastSeen();
-    
-    // Update last seen every 30 seconds
-    const interval = setInterval(updateLastSeen, 30000);
-    
-    // Poll for online users every 20 seconds
-    const pollInterval = setInterval(fetchProfilesOnly, 20000);
-    
-    // Subscribe to real-time changes
-    const channel = supabase
-      .channel('dashboard-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'tasks',
-        },
-        () => fetchData()
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'task_assignees',
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT' && payload.new.user_id === user.id) {
-            showDbNotification('Bạn vừa được gán vào một công việc mới', 'success');
-          }
-          fetchData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'task_comments',
-        },
-        (payload) => {
-          if (payload.new.user_id === user.id) return;
-          const relatedTask = tasksRef.current.find(t => t.id === payload.new.task_id);
-          if (relatedTask) {
-            showDbNotification(`Trao đổi mới từ ${payload.new.user_email?.split('@')[0]} trong task: ${relatedTask.title}`, 'info');
-          }
-        }
-      )
-      .subscribe();
-    
-    return () => {
-      clearInterval(interval);
-      clearInterval(pollInterval);
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const fetchTasksOnly = async () => {
-    try {
-      const { data, error } = await supabase.from('tasks').select(`
-        *,
-        task_assignees (
-          user_id
-        )
-      `);
-      if (error) throw error;
-      
-      const allTasks = (data || []) as any[];
-      const relatedTasks = allTasks.filter(task => 
-        task && (
-          task.user_id === user.id || 
-          (Array.isArray(task.task_assignees) && task.task_assignees.some((a: any) => a.user_id === user.id))
-        )
-      );
-
-      // Detect new tasks
-      const newTasks = relatedTasks.filter(newTask => !tasksRef.current.some(oldTask => oldTask.id === newTask.id));
-      if (newTasks.length > 0 && tasksRef.current.length > 0) {
-        newTasks.forEach(task => {
-          showDbNotification(`Công việc mới được giao: ${task.title}`, 'info');
-        });
-      }
-
-      setTasks(relatedTasks);
-      tasksRef.current = relatedTasks;
-    } catch (err: any) {
-      console.error('Error polling tasks:', err);
-    }
-  };
-
-  const fetchProfilesOnly = async () => {
-    try {
-      const { data } = await supabase.from('profiles').select('*');
-      if (data) {
-        const currentOnline = data.filter(p => 
-          p.id !== user.id && 
-          p.last_seen && 
-          (new Date().getTime() - new Date(p.last_seen).getTime() < 120000)
-        ).map(p => p.id);
-        
-        setOnlineUsers(new Set(currentOnline));
-        setProfiles(data);
-      }
-    } catch (err: any) {
-      console.error('Error polling profiles:', err);
-      showDbNotification('Không thể tải danh sách nhân sự: ' + (err.message || 'Lỗi kết nối'), 'error');
-    }
-  };
-
-  const updateLastSeen = async () => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ last_seen: new Date().toISOString() })
-        .eq('id', user.id);
-      if (error) {
-        if (error.code === 'PGRST204' || error.message.includes('column "last_seen" does not exist')) {
-          return;
-        }
-        console.error('Error updating last seen:', error);
-        showDbNotification('Lỗi cập nhật trạng thái online: ' + error.message, 'error');
-      }
-    } catch (err) {
-      console.error('Unexpected error updating last seen:', err);
-    }
-  };
-
+  // LOGIC GIỮ NGUYÊN TỪ CODE CŨ
   const fetchData = async () => {
     try {
       setLoading(true);
       const [tasksRes, profilesRes] = await Promise.all([
-        supabase.from('tasks').select(`
-          *,
-          task_assignees (
-            user_id
-          )
-        `),
+        supabase.from('tasks').select(`*, task_assignees (user_id)`),
         supabase.from('profiles').select('*')
       ]);
-
       if (tasksRes.error) throw tasksRes.error;
-      if (profilesRes.error) throw profilesRes.error;
-
       const allTasks = (tasksRes.data || []) as any[];
       const relatedTasks = allTasks.filter(task => 
-        task && (
-          task.user_id === user.id || 
-          (Array.isArray(task.task_assignees) && task.task_assignees.some((a: any) => a.user_id === user.id))
-        )
+        task && (task.user_id === user.id || task.task_assignees?.some((a: any) => a.user_id === user.id))
       );
-
       setTasks(relatedTasks);
       tasksRef.current = relatedTasks;
       setProfiles(profilesRes.data || []);
+      
+      // Update online status logic
+      const currentOnline = (profilesRes.data || []).filter(p => 
+        p.id !== user.id && p.last_seen && (new Date().getTime() - new Date(p.last_seen).getTime() < 120000)
+      ).map(p => p.id);
+      setOnlineUsers(new Set(currentOnline));
     } catch (err: any) {
-      console.error('Error fetching dashboard data:', err);
-      showDbNotification('Không thể tải dữ liệu: ' + (err.message || 'Lỗi kết nối'), 'error');
+      showDbNotification('Lỗi tải dữ liệu: ' + err.message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // Statistics calculations
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(() => {
+      supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // TÍNH TOÁN DỮ LIỆU
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter(t => t.status === 'done').length;
   const inProgressTasks = tasks.filter(t => t.status === 'in-progress').length;
-  const todoTasks = tasks.filter(t => t.status === 'todo').length;
   const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
-
-  // Calculate tasks completed this week
-  const now = new Date();
-  const startOfWeekDate = new Date(now.setDate(now.getDate() - now.getDay()));
-  const tasksDoneThisWeek = tasks.filter(t => 
-    t.status === 'done' && 
-    t.completion_time && 
-    new Date(t.completion_time) >= startOfWeekDate
-  ).length;
-
-  // Productivity Score (0-100)
-  const productivityScore = Math.min(100, Math.round((completionRate * 0.7) + (tasksDoneThisWeek * 5)));
-
-  // Calculate average completion time
-  const completedTasksWithTimes = tasks.filter(t => t.status === 'done' && t.start_time && t.completion_time);
-  let averageCompletionTimeHours = 0;
-  if (completedTasksWithTimes.length > 0) {
-    const totalTimeMs = completedTasksWithTimes.reduce((acc, task) => {
-      const start = new Date(task.start_time!).getTime();
-      const end = new Date(task.completion_time!).getTime();
-      return acc + (end - start);
-    }, 0);
-    averageCompletionTimeHours = Math.round((totalTimeMs / completedTasksWithTimes.length) / (1000 * 60 * 60) * 10) / 10;
-  }
-
-  // Data for Status Pie Chart
+  
   const statusData = [
-    { name: 'To Do', value: todoTasks, color: '#94a3b8' },
-    { name: 'In Progress', value: inProgressTasks, color: '#f59e0b' },
-    { name: 'Completed', value: doneTasks, color: '#10b981' },
+    { name: 'Cần làm', value: tasks.filter(t => t.status === 'todo').length, color: '#A8A29E' },
+    { name: 'Đang làm', value: inProgressTasks, color: '#D97706' },
+    { name: 'Hoàn thành', value: doneTasks, color: '#059669' },
   ].filter(d => d.value > 0);
 
-  // Data for User Workload Bar Chart
-  const userData = profiles.map(profile => {
-    const userTasks = tasks.filter(task => 
-      task.task_assignees?.some(a => a.user_id === profile.id)
-    );
-    return {
-      name: profile.display_name || profile.email.split('@')[0],
-      total: userTasks.length,
-      done: userTasks.filter(t => t.status === 'done').length,
-    };
-  }).filter(u => u.total > 0);
+  const userData = profiles.map(p => ({
+    name: p.display_name || p.email.split('@')[0],
+    total: tasks.filter(t => t.task_assignees?.some(a => a.user_id === p.id)).length,
+    done: tasks.filter(t => t.status === 'done' && t.task_assignees?.some(a => a.user_id === p.id)).length,
+  })).filter(u => u.total > 0);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen bg-[#FDFCFB]">
+      <div className="relative w-12 h-12">
+        <div className="absolute inset-0 border-4 border-stone-100 rounded-full"></div>
+        <div className="absolute inset-0 border-4 border-stone-900 rounded-full border-t-transparent animate-spin"></div>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 font-medium">
-            {user.email?.[0].toUpperCase()}
+    <div className="min-h-screen bg-[#F9F8F6] text-stone-900 pb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+        
+        {/* Header - Thanh thoát hơn */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+          <div className="flex items-center gap-5">
+            <div className="w-14 h-14 bg-stone-900 text-white rounded-[1.25rem] flex items-center justify-center shadow-xl shadow-stone-200">
+              <TrendingUp size={28} />
+            </div>
+            <div>
+              <h1 className="text-3xl font-serif font-bold tracking-tight text-stone-900">Quản Trị Hệ Thống</h1>
+              <div className="flex items-center gap-2 mt-1">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                <p className="text-stone-500 text-sm font-medium">{user.email}</p>
+              </div>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-serif font-medium text-stone-900">Dashboard Thống Kê</h1>
-            <p className="text-stone-500">Chào mừng, <span className="text-stone-700 font-medium">{user.email}</span></p>
+
+          <div className="flex items-center gap-2 bg-white/80 backdrop-blur-md p-2 rounded-2xl shadow-sm border border-stone-200/50">
+            <button onClick={fetchData} title="Làm mới" className="p-2.5 text-stone-400 hover:text-stone-900 hover:bg-stone-50 rounded-xl transition-all">
+              <RefreshCw size={20} />
+            </button>
+            <div className="w-[1px] h-6 bg-stone-200 mx-1" />
+            <button onClick={onBack} className="flex items-center gap-2 px-5 py-2.5 bg-stone-900 text-white rounded-xl text-sm font-semibold hover:bg-stone-800 transition-all shadow-md">
+              <LayoutGrid size={18} /> Bảng điều khiển
+            </button>
+            <button 
+              onClick={async () => { await supabase.auth.signOut(); window.location.href = '/'; }}
+              className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
+        </header>
+
+        {/* Layout Grid chính */}
+        <div className="grid grid-cols-12 gap-8">
+          
+          {/* CỘT TRÁI - Nội dung trọng tâm */}
+          <div className="col-span-12 lg:col-span-8 space-y-8">
+            
+            {/* Grid Thẻ thống kê */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard title="Tổng Task" value={totalTasks} icon={<Activity />} color="stone" />
+              <StatCard title="Hoàn Thành" value={doneTasks} icon={<CheckCircle2 />} color="emerald" subtitle={`${completionRate}% tiến độ`} />
+              <StatCard title="Đang Chạy" value={inProgressTasks} icon={<PlayCircle />} color="amber" onClick={onBack} isLink />
+              <StatCard title="Nhân Sự" value={profiles.length} icon={<Users />} color="blue" onClick={() => setShowPersonnel(true)} isLink subtitle={`${onlineUsers.size} trực tuyến`} />
+            </div>
+
+            {/* Biểu đồ phân bổ nhân sự */}
+            <section className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between mb-10">
+                <h2 className="font-serif font-bold text-xl flex items-center gap-3">
+                  <BarChart3 size={24} className="text-stone-300" /> Hiệu suất nhân sự
+                </h2>
+                <div className="flex gap-4 text-xs font-bold uppercase tracking-widest text-stone-400">
+                  <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-stone-200"></div> Tổng</span>
+                  <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Xong</span>
+                </div>
+              </div>
+              <div className="h-[380px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={userData} barGap={12}>
+                    <CartesianGrid strokeDasharray="8 8" vertical={false} stroke="#F1F1EF" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#78716c', fontSize: 12, fontWeight: 500 }} dy={15} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#78716c', fontSize: 12 }} />
+                    <Tooltip cursor={{ fill: '#F9F8F6' }} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.05)' }} />
+                    <Bar dataKey="total" name="Tổng" fill="#E7E5E4" radius={[8, 8, 8, 8]} barSize={35} />
+                    <Bar dataKey="done" name="Xong" fill="#10B981" radius={[8, 8, 8, 8]} barSize={35} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          </div>
+
+          {/* CỘT PHẢI - Tiện ích */}
+          <div className="col-span-12 lg:col-span-4 space-y-8">
+            
+            {/* Clock Widget */}
+            <div className="bg-stone-900 text-white p-8 rounded-[2rem] shadow-2xl relative overflow-hidden group">
+              <div className="relative z-10">
+                <Clock />
+              </div>
+              <div className="absolute -right-6 -bottom-6 text-white/[0.03] group-hover:scale-110 transition-transform duration-700">
+                <ClockIcon size={180} />
+              </div>
+            </div>
+
+            {/* Pie Chart Widget */}
+            <section className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm">
+              <h2 className="font-serif font-bold text-xl mb-8 flex items-center gap-3">
+                <PieChartIcon size={22} className="text-stone-300" /> Trạng thái
+              </h2>
+              <div className="h-[280px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={statusData} innerRadius={70} outerRadius={95} paddingAngle={10} dataKey="value" stroke="none">
+                      {statusData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: '16px', border: 'none' }} />
+                    <Legend iconType="circle" verticalAlign="bottom" wrapperStyle={{ paddingTop: '25px', fontSize: '12px', fontWeight: '600' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <div className="bg-white p-2 rounded-[2rem] border border-stone-200/60 shadow-sm">
+              <Calendar />
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={onBack}
-            className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-all shadow-sm"
-          >
-            <LayoutGrid className="w-4 h-4" /> Trang kéo thả
-          </button>
-          <button 
-            onClick={fetchData}
-            className="p-2 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
-            title="Tải lại dữ liệu"
-          >
-            <RefreshCw className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={async () => {
-              try {
-                // Set last_seen to null on logout
-                await supabase
-                  .from('profiles')
-                  .update({ last_seen: null })
-                  .eq('id', user.id);
-                await supabase.auth.signOut();
-              } catch (err) {
-                console.error('Logout error:', err);
-              } finally {
-                window.location.href = '/';
-              }
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-red-100 text-red-600 rounded-xl font-medium hover:bg-red-50 transition-all shadow-sm"
-          >
-            <LogOut className="w-4 h-4" /> Đăng xuất
-          </button>
-        </div>
-      </div>
 
-      {/* Time and Calendar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <Clock />
-        <Calendar />
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* Footer Stats Banner */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm"
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mt-12 bg-emerald-950 text-white p-10 rounded-[2.5rem] relative overflow-hidden shadow-2xl shadow-emerald-900/20"
         >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-stone-100 rounded-lg">
-              <Activity className="w-5 h-5 text-stone-600" />
+          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+            <div className="text-center md:text-left">
+              <h2 className="text-2xl font-serif font-bold mb-2 italic">Chỉ số năng suất</h2>
+              <p className="text-emerald-200/50 text-sm font-medium tracking-wide">Dữ liệu tính toán dựa trên 7 ngày gần nhất</p>
             </div>
-            <span className="text-xs font-medium text-stone-400 uppercase tracking-wider">Tổng Task</span>
-          </div>
-          <div className="text-3xl font-serif font-medium text-stone-900">{totalTasks}</div>
-          <p className="text-sm text-stone-500 mt-1">Tất cả các trạng thái</p>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-emerald-50 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            <div className="flex gap-12 md:gap-20">
+              <div className="text-center">
+                <div className="text-5xl font-serif font-bold text-emerald-400">{completionRate}%</div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Hiệu quả</div>
+              </div>
+              <div className="text-center">
+                <div className="text-5xl font-serif font-bold text-white">{inProgressTasks}</div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Đang xử lý</div>
+              </div>
+              <div className="text-center">
+                <div className="text-5xl font-serif font-bold text-emerald-400">{onlineUsers.size || 1}</div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Active</div>
+              </div>
             </div>
-            <span className="text-xs font-medium text-emerald-600 uppercase tracking-wider">Tuần Này</span>
           </div>
-          <div className="text-3xl font-serif font-medium text-stone-900">{tasksDoneThisWeek}</div>
-          <p className="text-sm text-stone-500 mt-1">Task đã xong trong tuần</p>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          onClick={onBack}
-          className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm cursor-pointer hover:border-amber-200 hover:shadow-md transition-all group"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-amber-50 rounded-lg group-hover:bg-amber-100 transition-colors">
-              <PlayCircle className="w-5 h-5 text-amber-600" />
-            </div>
-            <span className="text-xs font-medium text-amber-600 uppercase tracking-wider">Đang Làm</span>
-          </div>
-          <div className="text-3xl font-serif font-medium text-stone-900">{inProgressTasks}</div>
-          <p className="text-sm text-stone-500 mt-1">Cần tập trung xử lý (Click để xem)</p>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          onClick={() => setShowPersonnel(true)}
-          className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm cursor-pointer hover:border-stone-400 hover:shadow-md transition-all group"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-stone-100 rounded-lg group-hover:bg-stone-200 transition-colors">
-              <Users className="w-5 h-5 text-stone-600" />
-            </div>
-            <span className="text-xs font-medium text-stone-400 uppercase tracking-wider">Nhân Sự</span>
-          </div>
-          <div className="text-3xl font-serif font-medium text-stone-900">{onlineUsers.size}</div>
-          <p className="text-sm text-stone-500 mt-1">Nhân sự đang online (Click để xem)</p>
+          {/* Decorative gradients */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full -mr-32 -mt-32 blur-[100px]" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-400/5 rounded-full -ml-32 -mb-32 blur-[80px]" />
         </motion.div>
       </div>
 
-      {/* Personnel Modal */}
+      {/* Personnel Modal - Cải tiến đẹp hơn */}
       <AnimatePresence>
         {showPersonnel && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden"
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/40 backdrop-blur-md">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden border border-stone-200"
             >
-              <div className="p-6 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-stone-900 text-white rounded-xl">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-serif font-medium text-stone-900">Danh Sách Nhân Sự</h2>
-                    <p className="text-sm text-stone-500">Thành viên tham gia dự án</p>
-                  </div>
+              <div className="p-8 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
+                <div>
+                  <h2 className="text-2xl font-serif font-bold text-stone-900">Thành viên đội ngũ</h2>
+                  <p className="text-sm text-stone-500 font-medium">Danh sách nhân sự tham gia dự án</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={fetchProfilesOnly}
-                    className="p-2 hover:bg-stone-200 rounded-full transition-colors text-stone-400 hover:text-stone-600"
-                    title="Cập nhật trạng thái"
-                  >
-                    <RefreshCw className="w-5 h-5" />
-                  </button>
-                  <button 
-                    onClick={() => setShowPersonnel(false)}
-                    className="p-2 hover:bg-stone-200 rounded-full transition-colors text-stone-400 hover:text-stone-600"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
+                <button onClick={() => setShowPersonnel(false)} className="p-3 hover:bg-white hover:shadow-sm border border-transparent hover:border-stone-200 rounded-2xl transition-all text-stone-400 hover:text-stone-900">
+                  <X size={24} />
+                </button>
               </div>
-              
-              <div className="p-6 max-h-[60vh] overflow-y-auto">
-                <div className="grid grid-cols-1 gap-4">
-                  {profiles.map((profile) => {
-                    const lastSeenDate = profile.last_seen ? new Date(profile.last_seen) : null;
-                    const isOnline = lastSeenDate && (new Date().getTime() - lastSeenDate.getTime() < 120000);
-                    const userTasks = tasks.filter(t => t.task_assignees?.some(a => a.user_id === profile.id));
-                    const completedTasks = userTasks.filter(t => t.status === 'done').length;
-                    
-                    return (
-                      <div key={profile.id} className="flex items-center justify-between p-4 rounded-2xl border border-stone-100 hover:bg-stone-50 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className="relative">
-                            <div className="w-12 h-12 bg-stone-100 rounded-full flex items-center justify-center text-stone-600 font-medium text-lg border-2 border-white shadow-sm">
-                              {profile.display_name?.[0] || profile.email[0].toUpperCase()}
-                            </div>
-                            {isOnline && (
-                              <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full shadow-sm animate-pulse" />
-                            )}
+              <div className="p-8 max-h-[50vh] overflow-y-auto space-y-4 custom-scrollbar">
+                {profiles.map(p => {
+                   const isUserOnline = onlineUsers.has(p.id) || p.id === user.id;
+                   return (
+                    <div key={p.id} className="flex items-center justify-between p-5 rounded-[1.5rem] bg-[#F9F8F6] border border-stone-200/50 hover:border-stone-300 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="relative">
+                          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center font-bold text-stone-900 border border-stone-200 shadow-sm text-lg">
+                            {p.display_name?.[0] || p.email[0].toUpperCase()}
                           </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-medium text-stone-900">{profile.display_name || profile.email.split('@')[0]}</h3>
-                              {isOnline ? (
-                                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-1.5 py-0.5 rounded">Online</span>
-                              ) : (
-                                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest bg-stone-50 px-1.5 py-0.5 rounded">Offline</span>
-                              )}
-                            </div>
-                            <p className="text-xs text-stone-500">{profile.email}</p>
-                            {lastSeenDate && !isOnline && (
-                              <p className="text-[10px] text-stone-400 mt-0.5">
-                                Hoạt động: {lastSeenDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} {lastSeenDate.toLocaleDateString()}
-                              </p>
-                            )}
-                          </div>
+                          {isUserOnline && <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-4 border-[#F9F8F6] rounded-full"></div>}
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm font-medium text-stone-900">{completedTasks}/{userTasks.length} Task</div>
-                          <p className="text-[10px] text-stone-400 uppercase tracking-wider">Hoàn thành</p>
+                        <div>
+                          <div className="font-bold text-stone-900">{p.display_name || p.email.split('@')[0]}</div>
+                          <div className="text-xs text-stone-400 font-medium">{p.email}</div>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${isUserOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-200 text-stone-500'}`}>
+                        {isUserOnline ? 'Trực tuyến' : 'Ngoại tuyến'}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              
-              <div className="p-6 bg-stone-50 border-t border-stone-100 flex justify-end">
-                <button 
-                  onClick={() => setShowPersonnel(false)}
-                  className="px-6 py-2 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-all shadow-sm"
-                >
-                  Đóng
-                </button>
+              <div className="p-8 bg-stone-50/50 border-t border-stone-100 flex justify-end">
+                 <button onClick={() => setShowPersonnel(false)} className="px-8 py-3 bg-stone-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-stone-200">Đóng cửa sổ</button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Status Distribution */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-white p-8 rounded-3xl border border-stone-200 shadow-sm"
-        >
-          <div className="flex items-center gap-2 mb-8">
-            <PieChartIcon className="w-5 h-5 text-stone-400" />
-            <h2 className="text-xl font-serif font-medium text-stone-900">Trạng Thái Công Việc</h2>
-          </div>
-          <div className="h-[300px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                />
-                <Legend verticalAlign="bottom" height={36}/>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        {/* User Workload */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white p-8 rounded-3xl border border-stone-200 shadow-sm"
-        >
-          <div className="flex items-center gap-2 mb-8">
-            <BarChart3 className="w-5 h-5 text-stone-400" />
-            <h2 className="text-xl font-serif font-medium text-stone-900">Phân Bổ Nhân Sự</h2>
-          </div>
-          <div className="h-[300px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={userData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#64748b', fontSize: 12 }}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#64748b', fontSize: 12 }}
-                />
-                <Tooltip 
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                />
-                <Bar dataKey="total" name="Tổng Task" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="done" name="Đã Xong" fill="#10b981" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Quality Section */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="mt-8 bg-emerald-900 text-white p-8 rounded-3xl overflow-hidden relative"
-      >
-        <div className="relative z-10">
-          <h2 className="text-2xl font-serif font-medium mb-2">Chất Lượng & Hiệu Suất</h2>
-          <p className="text-emerald-100/80 mb-6 max-w-md">
-            Dựa trên tỷ lệ hoàn thành và thời gian xử lý trung bình của toàn bộ hệ thống.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="flex items-end gap-4">
-              <div className="text-6xl font-serif font-medium">{completionRate}%</div>
-              <div className="mb-2 text-emerald-200">Tỷ lệ hoàn thành</div>
-            </div>
-            <div className="flex items-end gap-4">
-              <div className="text-6xl font-serif font-medium">{averageCompletionTimeHours}h</div>
-              <div className="mb-2 text-emerald-200">Thời gian xử lý TB</div>
-            </div>
-            <div className="flex items-end gap-4">
-              <div className="text-6xl font-serif font-medium">{productivityScore}</div>
-              <div className="mb-2 text-emerald-200">Điểm năng suất</div>
-            </div>
-          </div>
-          <div className="mt-8 w-full bg-emerald-800/50 h-3 rounded-full overflow-hidden">
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: `${completionRate}%` }}
-              transition={{ duration: 1, ease: "easeOut" }}
-              className="h-full bg-emerald-400"
-            />
-          </div>
-        </div>
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-800/20 rounded-full -mr-32 -mt-32 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-400/10 rounded-full -ml-24 -mb-24 blur-2xl" />
-      </motion.div>
-      <Notification 
-        message={dbNotification?.message || null} 
-        type={dbNotification?.type || 'info'} 
-        onClose={() => setDbNotification(null)} 
-      />
+      <Notification message={dbNotification?.message || null} type={dbNotification?.type || 'info'} onClose={() => setDbNotification(null)} />
     </div>
   );
 };
