@@ -191,6 +191,38 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
           </div>
         </header>
 
+        {/* Footer Stats Banner */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mb-10 bg-emerald-950 text-white p-10 rounded-[2.5rem] relative overflow-hidden shadow-2xl shadow-emerald-900/20"
+        >
+          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+            <div className="text-center md:text-left">
+              <h2 className="text-2xl font-serif font-bold mb-2 italic">Chỉ số năng suất</h2>
+              <p className="text-emerald-200/50 text-sm font-medium tracking-wide">Dữ liệu tính toán dựa trên 7 ngày gần nhất</p>
+            </div>
+            <div className="flex gap-12 md:gap-20">
+              <div className="text-center">
+                <div className="text-5xl font-serif font-bold text-emerald-400">{completionRate}%</div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Hiệu quả</div>
+              </div>
+              <div className="text-center">
+                <div className="text-5xl font-serif font-bold text-white">{inProgressTasks}</div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Đang xử lý</div>
+              </div>
+              <div className="text-center">
+                <div className="text-5xl font-serif font-bold text-emerald-400">{onlineUsers.length || 1}</div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Active</div>
+              </div>
+            </div>
+          </div>
+          {/* Decorative gradients */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full -mr-32 -mt-32 blur-[100px]" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-400/5 rounded-full -ml-32 -mb-32 blur-[80px]" />
+        </motion.div>
+
         {/* Layout Grid chính */}
         <div className="grid grid-cols-12 gap-8">
           
@@ -267,38 +299,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
             </div>
           </div>
         </div>
-
-        {/* Footer Stats Banner */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mt-12 bg-emerald-950 text-white p-10 rounded-[2.5rem] relative overflow-hidden shadow-2xl shadow-emerald-900/20"
-        >
-          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
-            <div className="text-center md:text-left">
-              <h2 className="text-2xl font-serif font-bold mb-2 italic">Chỉ số năng suất</h2>
-              <p className="text-emerald-200/50 text-sm font-medium tracking-wide">Dữ liệu tính toán dựa trên 7 ngày gần nhất</p>
-            </div>
-            <div className="flex gap-12 md:gap-20">
-              <div className="text-center">
-                <div className="text-5xl font-serif font-bold text-emerald-400">{completionRate}%</div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Hiệu quả</div>
-              </div>
-              <div className="text-center">
-                <div className="text-5xl font-serif font-bold text-white">{inProgressTasks}</div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Đang xử lý</div>
-              </div>
-              <div className="text-center">
-                <div className="text-5xl font-serif font-bold text-emerald-400">{onlineUsers.size || 1}</div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Active</div>
-              </div>
-            </div>
-          </div>
-          {/* Decorative gradients */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full -mr-32 -mt-32 blur-[100px]" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-400/5 rounded-full -ml-32 -mb-32 blur-[80px]" />
-        </motion.div>
       </div>
 
       {/* Personnel Modal - Cải tiến đẹp hơn */}
