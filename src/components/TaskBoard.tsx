@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Task, TaskStatus, UserProfile } from '../types';
@@ -68,6 +68,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
+  const tasksRef = useRef<Task[]>([]);
+
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
 
   const showNotification = (message: string, type: NotificationType = 'info') => {
     setNotification({ message, type });
@@ -128,19 +133,56 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
         },
         (payload) => {
           console.log('Realtime task change received:', payload);
+          
+          if (payload.eventType === 'UPDATE') {
+            const oldTask = tasksRef.current.find(t => t.id === payload.new.id);
+            if (oldTask && oldTask.status !== payload.new.status) {
+              showNotification(`Task "${payload.new.title}" chuyển sang: ${payload.new.status.replace('-', ' ')}`, 'info');
+            }
+          }
+          
           fetchTasks();
         }
       )
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'task_assignees',
         },
-        () => {
-          console.log('Realtime assignee change received');
+        async (payload) => {
+          console.log('Realtime assignee change received:', payload);
+          if (payload.new.user_id === user.id) {
+            const existingTask = tasksRef.current.find(t => t.id === payload.new.task_id);
+            if (existingTask) {
+              showNotification(`Bạn đã được gán vào task: ${existingTask.title}`, 'success');
+            } else {
+              const { data } = await supabase.from('tasks').select('title').eq('id', payload.new.task_id).single();
+              if (data) {
+                showNotification(`Bạn vừa được gán vào task mới: ${data.title}`, 'success');
+              }
+            }
+          }
           fetchTasks(); 
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'task_comments',
+        },
+        (payload) => {
+          console.log('Realtime comment received:', payload);
+          const newComment = payload.new;
+          if (newComment.user_id === user.id) return;
+
+          const relatedTask = tasksRef.current.find(t => t.id === newComment.task_id);
+          if (relatedTask) {
+            showNotification(`Trao đổi mới từ ${newComment.user_email?.split('@')[0]} trong task: ${relatedTask.title}`, 'info');
+          }
         }
       )
       .subscribe((status) => {

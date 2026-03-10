@@ -43,13 +43,53 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
     // Poll for online users every 20 seconds
     const pollInterval = setInterval(fetchProfilesOnly, 20000);
     
-    // Poll for tasks every 15 seconds
-    const taskPollInterval = setInterval(fetchTasksOnly, 15000);
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel('dashboard-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+        },
+        () => fetchData()
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_assignees',
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT' && payload.new.user_id === user.id) {
+            showDbNotification('Bạn vừa được gán vào một công việc mới', 'success');
+          }
+          fetchData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'task_comments',
+        },
+        (payload) => {
+          if (payload.new.user_id === user.id) return;
+          const relatedTask = tasksRef.current.find(t => t.id === payload.new.task_id);
+          if (relatedTask) {
+            showDbNotification(`Trao đổi mới từ ${payload.new.user_email?.split('@')[0]} trong task: ${relatedTask.title}`, 'info');
+          }
+        }
+      )
+      .subscribe();
     
     return () => {
       clearInterval(interval);
       clearInterval(pollInterval);
-      clearInterval(taskPollInterval);
+      supabase.removeChannel(channel);
     };
   }, []);
 
