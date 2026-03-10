@@ -39,11 +39,21 @@ export const Clock: React.FC = () => {
 
   const hour = time.getHours();
   
-  // Xác định chủ đề màu sắc theo thời gian (Dynamic Themes)
+  // Xác định chủ đề màu sắc theo nhiệt độ (Dynamic Themes)
   const getTheme = () => {
-    if (hour >= 5 && hour < 12) return "from-cyan-500 via-blue-500 to-indigo-600"; // Sáng
-    if (hour >= 12 && hour < 18) return "from-orange-400 via-rose-500 to-amber-500"; // Chiều
-    return "from-slate-900 via-purple-900 to-black"; // Tối
+    const temp = weather?.temp ?? 25;
+    
+    let baseTheme = "from-emerald-500 via-teal-500 to-emerald-700"; // Moderate (20-28°C)
+    if (temp < 20) baseTheme = "from-blue-400 via-indigo-500 to-blue-700"; // Cold
+    else if (temp >= 28 && temp < 33) baseTheme = "from-orange-400 via-amber-500 to-orange-600"; // Warm
+    else if (temp >= 33) baseTheme = "from-red-500 via-rose-600 to-red-800"; // Hot
+    
+    // Áp dụng tông tối nếu là ban đêm
+    if (hour >= 18 || hour < 5) {
+        return baseTheme.replace("from-", "from-slate-900/80 via-").replace("to-", "to-black");
+    }
+    
+    return baseTheme;
   };
 
   const getGreeting = () => {
