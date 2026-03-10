@@ -54,6 +54,7 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, children }) => {
   );
 };
 
+import { parseISO, formatISO } from 'date-fns';
 import { Notification, NotificationType } from './Notification';
 
 export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) => {
@@ -62,7 +63,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [newTask, setNewTask] = useState({ title: '', description: '' });
+  const [newTask, setNewTask] = useState({ title: '', description: '', start_time: '' });
   const [newTaskAssignees, setNewTaskAssignees] = useState<string[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -252,10 +253,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
           status: 'todo',
           user_id: user.id,
           position: maxPos + 1000,
+          start_time: newTask.start_time ? formatISO(new Date(newTask.start_time)) : null,
         },
       ]).select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating task:', error);
+        throw error;
+      }
       
       const createdTask = data?.[0];
       if (createdTask) {
@@ -272,11 +277,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
         }
       }
 
-      setNewTask({ title: '', description: '' });
+      setNewTask({ title: '', description: '', start_time: '' });
       setNewTaskAssignees([]);
       setIsModalOpen(false);
       fetchTasks();
-      showNotification('Đã tạo task mới thành công', 'success');
+      showNotification('Đã tạo task mới thành công. Lưu ý: Nếu bạn đang xem trong khung Preview, hãy mở tab mới để thấy đúng múi giờ địa phương.', 'success');
     } catch (err: any) {
       console.error('Error creating task:', err);
       showNotification('Không thể tạo task: ' + (err.message || 'Lỗi không xác định'), 'error');
@@ -285,12 +290,23 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
 
   const updateTaskStatus = async (id: string, status: TaskStatus) => {
     try {
+      const updateData: any = { status };
+      if (status === 'done') {
+        updateData.completion_time = new Date().toISOString();
+      } else {
+        updateData.completion_time = null;
+      }
+
       const { error } = await supabase
         .from('tasks')
-        .update({ status })
+        .update(updateData)
         .eq('id', id);
 
       if (error) throw error;
+      
+      if (selectedTask?.id === id) {
+        setSelectedTask({ ...selectedTask, ...updateData });
+      }
     } catch (err: any) {
       console.error('Error updating task:', err);
       showNotification('Không thể thay đổi trạng thái: ' + (err.message || 'Bạn không có quyền thực hiện thao tác này'), 'error');
@@ -412,12 +428,20 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
     console.log(`Updating task ${activeId} to status ${newStatus} at position ${newPosition}`);
 
     try {
+      const updateData: any = { 
+        status: newStatus,
+        position: newPosition 
+      };
+
+      if (newStatus === 'done') {
+        updateData.completion_time = new Date().toISOString();
+      } else {
+        updateData.completion_time = null;
+      }
+
       const { error, data } = await supabase
         .from('tasks')
-        .update({ 
-          status: newStatus,
-          position: newPosition 
-        })
+        .update(updateData)
         .eq('id', activeId)
         .select();
 
@@ -430,7 +454,16 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
         showNotification('Đã cập nhật trạng thái task', 'success');
         // Local state is already updated by handleDragOver, 
         // but we ensure position is synced
-        setTasks(prev => prev.map(t => t.id === activeId ? { ...t, status: newStatus, position: newPosition } : t));
+        const updatedTask = { 
+          ...task, 
+          status: newStatus, 
+          position: newPosition,
+          completion_time: updateData.completion_time
+        };
+        setTasks(prev => prev.map(t => t.id === activeId ? updatedTask : t));
+        if (selectedTask?.id === activeId) {
+          setSelectedTask(updatedTask);
+        }
       }
     } catch (err) {
       console.error('Error in handleDragEnd:', err);
@@ -643,6 +676,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
                       className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-stone-50/50 min-h-[100px] resize-none"
                       placeholder="Add more details about this task..."
                     />
+                  </div>
+                  <div className="grid grid-cols-1 gap-6">
+                    <div>
+                      <label className="block text-xs font-medium uppercase tracking-wider text-stone-400 mb-2 ml-1">
+                        Thời gian bắt đầu
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={newTask.start_time}
+                        onChange={(e) => setNewTask({ ...newTask, start_time: e.target.value })}
+                        className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-stone-50/50"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium uppercase tracking-wider text-stone-400 mb-2 ml-1">

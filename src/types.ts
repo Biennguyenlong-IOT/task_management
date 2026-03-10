@@ -13,6 +13,8 @@ export interface Task {
     profiles?: { email: string };
   }[];
   position?: number;
+  start_time?: string | null;
+  completion_time?: string | null;
 }
 
 export interface TaskComment {

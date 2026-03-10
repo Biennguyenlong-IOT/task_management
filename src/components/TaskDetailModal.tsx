@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Task, TaskStatus, UserProfile } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Calendar, Clock, PlayCircle, CheckCircle2, MessageSquare, User as UserIcon, Loader2, Plus } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { TaskComments } from './TaskComments';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
@@ -137,13 +137,29 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             {task.title}
           </h2>
           
-          <div className="flex items-center gap-4 text-stone-400 mb-8">
+          <div className="flex flex-wrap items-center gap-6 text-stone-400 mb-8">
             <div className="flex items-center gap-1.5">
               <Calendar className="w-4 h-4" />
               <span className="text-xs font-medium">
-                Tạo ngày {format(new Date(task.created_at), 'dd/MM/yyyy')}
+                Tạo ngày {format(parseISO(task.created_at), 'dd/MM/yyyy')}
               </span>
             </div>
+            {task.start_time && (
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-amber-500" />
+                <span className="text-xs font-medium">
+                  Bắt đầu: {format(parseISO(task.start_time), 'dd/MM/yyyy HH:mm')}
+                </span>
+              </div>
+            )}
+            {task.completion_time && (
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <span className="text-xs font-medium">
+                  Hoàn thành: {format(parseISO(task.completion_time), 'dd/MM/yyyy HH:mm')}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-6">
