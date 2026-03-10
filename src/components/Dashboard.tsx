@@ -53,7 +53,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPersonnel, setShowPersonnel] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [dbNotification, setDbNotification] = useState<{ message: string, type: NotificationType } | null>(null);
 
   const showDbNotification = (message: string, type: NotificationType = 'info') => {
@@ -68,6 +68,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
         supabase.from('tasks').select(`*, task_assignees (user_id)`),
         supabase.from('profiles').select('*')
       ]);
+      console.log('Profiles data:', profilesRes.data);
       if (tasksRes.error) throw tasksRes.error;
       const allTasks = (tasksRes.data || []) as any[];
       const relatedTasks = allTasks.filter(task => 
@@ -78,10 +79,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
       setProfiles(profilesRes.data || []);
       
       // Update online status logic
-      const currentOnline = (profilesRes.data || []).filter(p => 
-        p.id !== user.id && p.last_seen && (new Date().getTime() - new Date(p.last_seen).getTime() < 120000)
-      ).map(p => p.id);
-      setOnlineUsers(new Set(currentOnline));
+      const currentOnline = (profilesRes.data || []).filter(p => p.last_seen !== null).map(p => p.id);
+      console.log('Online users:', currentOnline, 'Profiles:', profilesRes.data);
+      setOnlineUsers(currentOnline);
     } catch (err: any) {
       showDbNotification('Lỗi tải dữ liệu: ' + err.message, 'error');
     } finally {
@@ -92,9 +92,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
   useEffect(() => {
     fetchData();
     const interval = setInterval(() => {
-      supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id);
+      supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(({ error }) => {
+        if (error) {
+          if (error.code === 'PGRST204' || error.message.includes('column "last_seen" does not exist')) {
+            console.warn('Column last_seen does not exist');
+          } else {
+            console.error('Error updating last_seen:', error);
+          }
+        } else {
+          console.log('last_seen updated for', user.id);
+        }
+      });
     }, 30000);
-    return () => clearInterval(interval);
+
+    const channel = supabase
+      .channel('dashboard-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async () => {
+        const { data } = await supabase.from('profiles').select('*');
+        if (data) {
+          setProfiles(data);
+          const currentOnline = data.filter(p => p.last_seen !== null).map(p => p.id);
+          setOnlineUsers(currentOnline);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // TÍNH TOÁN DỮ LIỆU
@@ -152,7 +179,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
               <LayoutGrid size={18} /> Bảng điều khiển
             </button>
             <button 
-              onClick={async () => { await supabase.auth.signOut(); window.location.href = '/'; }}
+              onClick={async () => {
+                await supabase.from('profiles').update({ last_seen: null }).eq('id', user.id);
+                await supabase.auth.signOut();
+                window.location.href = '/';
+              }}
               className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
             >
               <LogOut size={20} />
@@ -171,7 +202,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
               <StatCard title="Tổng Task" value={totalTasks} icon={<Activity />} color="stone" />
               <StatCard title="Hoàn Thành" value={doneTasks} icon={<CheckCircle2 />} color="emerald" subtitle={`${completionRate}% tiến độ`} />
               <StatCard title="Đang Chạy" value={inProgressTasks} icon={<PlayCircle />} color="amber" onClick={onBack} isLink />
-              <StatCard title="Nhân Sự" value={profiles.length} icon={<Users />} color="blue" onClick={() => setShowPersonnel(true)} isLink subtitle={`${onlineUsers.size} trực tuyến`} />
+              <StatCard title="Nhân Sự" value={profiles.length} icon={<Users />} color="blue" onClick={() => setShowPersonnel(true)} isLink subtitle={`${onlineUsers.length} trực tuyến`} />
             </div>
 
             {/* Biểu đồ phân bổ nhân sự */}
@@ -288,7 +319,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
               </div>
               <div className="p-8 max-h-[50vh] overflow-y-auto space-y-4 custom-scrollbar">
                 {profiles.map(p => {
-                   const isUserOnline = onlineUsers.has(p.id) || p.id === user.id;
+                   const isUserOnline = onlineUsers.includes(p.id) || p.id === user.id;
                    return (
                     <div key={p.id} className="flex items-center justify-between p-5 rounded-[1.5rem] bg-[#F9F8F6] border border-stone-200/50 hover:border-stone-300 transition-colors">
                       <div className="flex items-center gap-4">

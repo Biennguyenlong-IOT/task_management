@@ -29,12 +29,15 @@ export const Auth: React.FC = () => {
         if (error) throw error;
         setMessage({ type: 'success', text: 'Thành công! Vui lòng kiểm tra email của bạn để xác nhận tài khoản trước khi đăng nhập.' });
       } else if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
           if (error.message.includes('Email not confirmed')) {
             throw new Error('Email của bạn chưa được xác nhận. Vui lòng kiểm tra hộp thư đến để nhấn vào link xác nhận.');
           }
           throw error;
+        }
+        if (data.user) {
+          await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', data.user.id);
         }
       } else if (mode === 'forgot_password') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
