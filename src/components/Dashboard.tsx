@@ -41,7 +41,7 @@ const StatCard = ({ title, value, icon, color, onClick, subtitle, isLink }: any)
         </div>
         <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{title}</span>
       </div>
-      <div className="text-3xl font-serif font-semibold text-stone-900">{value}</div>
+      <div className="text-3xl font-sans font-semibold text-stone-900">{value}</div>
       {subtitle && <p className="text-xs text-stone-500 mt-1.5 font-medium">{subtitle}</p>}
     </motion.div>
   );
@@ -162,7 +162,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
               <TrendingUp size={28} />
             </div>
             <div>
-              <h1 className="text-3xl font-serif font-bold tracking-tight text-stone-900">Quản Trị Hệ Thống</h1>
+              <h1 className="text-3xl font-sans font-bold tracking-tight text-stone-900">Quản Trị Hệ Thống</h1>
               <div className="flex items-center gap-2 mt-1">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                 <p className="text-stone-500 text-sm font-medium">{user.email}</p>
@@ -200,20 +200,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
         >
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
             <div className="text-center md:text-left">
-              <h2 className="text-2xl font-serif font-bold mb-2 italic">Chỉ số năng suất</h2>
+              <h2 className="text-2xl font-sans font-bold mb-2 italic">Chỉ số năng suất</h2>
               <p className="text-emerald-200/50 text-sm font-medium tracking-wide">Dữ liệu tính toán dựa trên 7 ngày gần nhất</p>
             </div>
             <div className="flex gap-12 md:gap-20">
               <div className="text-center">
-                <div className="text-5xl font-serif font-bold text-emerald-400">{completionRate}%</div>
+                <div className="text-5xl font-sans font-bold text-emerald-400">{completionRate}%</div>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Hiệu quả</div>
               </div>
               <div className="text-center">
-                <div className="text-5xl font-serif font-bold text-white">{inProgressTasks}</div>
+                <div className="text-5xl font-sans font-bold text-white">{inProgressTasks}</div>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Đang xử lý</div>
               </div>
               <div className="text-center">
-                <div className="text-5xl font-serif font-bold text-emerald-400">{onlineUsers.length || 1}</div>
+                <div className="text-5xl font-sans font-bold text-emerald-400">{onlineUsers.length || 1}</div>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Active</div>
               </div>
             </div>
@@ -240,7 +240,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
             {/* Biểu đồ phân bổ nhân sự */}
             <section className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm overflow-hidden">
               <div className="flex items-center justify-between mb-10">
-                <h2 className="font-serif font-bold text-xl flex items-center gap-3">
+                <h2 className="font-sans font-bold text-xl flex items-center gap-3">
                   <BarChart3 size={24} className="text-stone-300" /> Hiệu suất nhân sự
                 </h2>
                 <div className="flex gap-4 text-xs font-bold uppercase tracking-widest text-stone-400">
@@ -278,7 +278,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
 
             {/* Pie Chart Widget */}
             <section className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm">
-              <h2 className="font-serif font-bold text-xl mb-8 flex items-center gap-3">
+              <h2 className="font-sans font-bold text-xl mb-8 flex items-center gap-3">
                 <PieChartIcon size={22} className="text-stone-300" /> Trạng thái
               </h2>
               <div className="h-[280px]">
@@ -310,7 +310,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
             >
               <div className="p-8 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
                 <div>
-                  <h2 className="text-2xl font-serif font-bold text-stone-900">Thành viên đội ngũ</h2>
+                  <h2 className="text-2xl font-sans font-bold text-stone-900">Thành viên đội ngũ</h2>
                   <p className="text-sm text-stone-500 font-medium">Danh sách nhân sự tham gia dự án</p>
                 </div>
                 <button onClick={() => setShowPersonnel(false)} className="p-3 hover:bg-white hover:shadow-sm border border-transparent hover:border-stone-200 rounded-2xl transition-all text-stone-400 hover:text-stone-900">

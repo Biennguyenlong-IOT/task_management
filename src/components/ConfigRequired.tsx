@@ -15,7 +15,7 @@ export const ConfigRequired: React.FC = () => {
             <AlertCircle className="text-amber-600 w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-3xl font-serif font-medium text-stone-900">Cấu hình Supabase</h1>
+            <h1 className="text-3xl font-sans font-medium text-stone-900">Cấu hình Supabase</h1>
             <p className="text-stone-500">Bạn cần thiết lập API Keys để ứng dụng có thể hoạt động.</p>
           </div>
         </div>

@@ -133,7 +133,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             </button>
           </div>
 
-          <h2 className="text-3xl font-serif font-medium text-stone-900 mb-4 leading-tight">
+          <h2 className="text-3xl font-sans font-medium text-stone-900 mb-4 leading-tight">
             {task.title}
           </h2>
           

@@ -69,7 +69,7 @@ export const Auth: React.FC = () => {
           <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/20">
             <LayoutGrid className="text-white w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-serif font-medium text-stone-900">
+          <h1 className="text-2xl font-sans font-medium text-stone-900">
             {mode === 'login' ? 'Chào mừng trở lại' : 
              mode === 'signup' ? 'Tạo tài khoản mới' : 
              mode === 'forgot_password' ? 'Khôi phục mật khẩu' : 'Đặt mật khẩu mới'}

@@ -540,7 +540,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
             {user.email?.[0].toUpperCase()}
           </div>
           <div>
-            <h1 className="text-3xl font-serif font-medium text-stone-900">My Workspace</h1>
+            <h1 className="text-3xl font-sans font-medium text-stone-900">My Workspace</h1>
             <div className="flex items-center gap-2 mt-1">
               <p className="text-stone-500">Chào, <span className="text-emerald-600 font-medium">{user.email}</span></p>
               <span className="w-1 h-1 rounded-full bg-stone-300" />
@@ -705,7 +705,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
               className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden"
             >
               <div className="p-8">
-                <h2 className="text-2xl font-serif font-medium text-stone-900 mb-6">Create New Task</h2>
+                <h2 className="text-2xl font-sans font-medium text-stone-900 mb-6">Create New Task</h2>
                 <form onSubmit={createTask} className="space-y-6">
                   <div>
                     <label className="block text-xs font-medium uppercase tracking-wider text-stone-400 mb-2 ml-1">
