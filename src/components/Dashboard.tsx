@@ -162,7 +162,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
               <TrendingUp size={28} />
             </div>
             <div>
-              <h1 className="text-3xl font-sans font-bold tracking-tight text-stone-900">Quản Trị Hệ Thống</h1>
+              <h1 className="text-3xl font-sans font-bold tracking-tight text-stone-900">DASHBOARD</h1>
               <div className="flex items-center gap-2 mt-1">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                 <p className="text-stone-500 text-sm font-medium">{user.email}</p>
