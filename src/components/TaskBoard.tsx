@@ -49,7 +49,7 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, children }) => {
   });
 
   return (
-    <div ref={setNodeRef} className="flex flex-col gap-4 min-h-[500px] bg-stone-100/50 p-3 rounded-2xl border border-stone-200/50">
+    <div ref={setNodeRef} className="flex flex-col gap-4 h-[500px] overflow-y-auto scrollbar-hide bg-stone-100/50 p-3 rounded-2xl border border-stone-200/50">
       {children}
     </div>
   );
@@ -247,8 +247,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
             created_at
           )
         `)
-        .order('position', { ascending: true })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .order('position', { ascending: true });
 
       if (error) {
         // Fallback if position column doesn't exist yet
