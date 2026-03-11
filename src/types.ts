@@ -1,5 +1,11 @@
 export type TaskStatus = 'todo' | 'in-progress' | 'done';
 
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  'todo': 'Cần làm',
+  'in-progress': 'Đang làm',
+  'done': 'Hoàn thành'
+};
+
 export interface Task {
   id: string;
   title: string;
@@ -11,6 +17,9 @@ export interface Task {
   task_assignees?: { 
     user_id: string;
     profiles?: { email: string };
+  }[];
+  task_comments?: {
+    created_at: string;
   }[];
   position?: number;
   start_time?: string | null;

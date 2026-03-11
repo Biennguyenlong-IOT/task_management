@@ -196,31 +196,40 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="mb-10 bg-emerald-950 text-white p-10 rounded-[2.5rem] relative overflow-hidden shadow-2xl shadow-emerald-900/20"
+          className="mb-10 grid grid-cols-1 lg:grid-cols-3 gap-8"
         >
-          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
-            <div className="text-center md:text-left">
-              <h2 className="text-2xl font-sans font-bold mb-2 italic">Chỉ số năng suất</h2>
-              <p className="text-emerald-200/50 text-sm font-medium tracking-wide">Dữ liệu tính toán dựa trên 7 ngày gần nhất</p>
+          <div className="lg:col-span-2 bg-emerald-950 text-white p-10 rounded-[2.5rem] relative overflow-hidden shadow-2xl shadow-emerald-900/20">
+            <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+              <div className="text-center md:text-left">
+                <h2 className="text-2xl font-sans font-bold mb-2 italic">Chỉ số năng suất</h2>
+                <p className="text-emerald-200/50 text-sm font-medium tracking-wide">Dữ liệu tính toán dựa trên 7 ngày gần nhất</p>
+                <div className="mt-4">
+                  <Clock />
+                </div>
+              </div>
+              <div className="flex gap-12 md:gap-20">
+                <div className="text-center">
+                  <div className="text-5xl font-sans font-bold text-emerald-400">{completionRate}%</div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Hiệu quả</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-5xl font-sans font-bold text-white">{inProgressTasks}</div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Đang xử lý</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-5xl font-sans font-bold text-emerald-400">{onlineUsers.length || 1}</div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Active</div>
+                </div>
+              </div>
             </div>
-            <div className="flex gap-12 md:gap-20">
-              <div className="text-center">
-                <div className="text-5xl font-sans font-bold text-emerald-400">{completionRate}%</div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Hiệu quả</div>
-              </div>
-              <div className="text-center">
-                <div className="text-5xl font-sans font-bold text-white">{inProgressTasks}</div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Đang xử lý</div>
-              </div>
-              <div className="text-center">
-                <div className="text-5xl font-sans font-bold text-emerald-400">{onlineUsers.length || 1}</div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Active</div>
-              </div>
-            </div>
+            {/* Decorative gradients */}
+            <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full -mr-32 -mt-32 blur-[100px]" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-400/5 rounded-full -ml-32 -mb-32 blur-[80px]" />
           </div>
-          {/* Decorative gradients */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full -mr-32 -mt-32 blur-[100px]" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-400/5 rounded-full -ml-32 -mb-32 blur-[80px]" />
+
+          <div className="bg-white p-6 rounded-[2.5rem] border border-stone-200/60 shadow-sm flex items-center justify-center">
+            <Calendar />
+          </div>
         </motion.div>
 
         {/* Layout Grid chính */}
@@ -266,16 +275,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
           {/* CỘT PHẢI - Tiện ích */}
           <div className="col-span-12 lg:col-span-4 space-y-8">
             
-            {/* Clock Widget */}
-            <div className="bg-stone-900 text-white p-8 rounded-[2rem] shadow-2xl relative overflow-hidden group">
-              <div className="relative z-10">
-                <Clock />
-              </div>
-              <div className="absolute -right-6 -bottom-6 text-white/[0.03] group-hover:scale-110 transition-transform duration-700">
-                <ClockIcon size={180} />
-              </div>
-            </div>
-
             {/* Pie Chart Widget */}
             <section className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm">
               <h2 className="font-sans font-bold text-xl mb-8 flex items-center gap-3">
@@ -293,10 +292,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
                 </ResponsiveContainer>
               </div>
             </section>
-
-            <div className="bg-white p-2 rounded-[2rem] border border-stone-200/60 shadow-sm">
-              <Calendar />
-            </div>
           </div>
         </div>
       </div>

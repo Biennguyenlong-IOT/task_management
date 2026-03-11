@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Task, TaskStatus } from '../types';
-import { Calendar, MoreVertical, Trash2, CheckCircle2, Clock, PlayCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Task, TaskStatus, TASK_STATUS_LABELS } from '../types';
+import { Calendar, MoreVertical, Trash2, CheckCircle2, Clock, PlayCircle, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
+import { vi } from 'date-fns/locale';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 
@@ -15,7 +16,37 @@ interface TaskCardProps {
 
 export const TaskCard: React.FC<TaskCardProps> = ({ task, currentUserId, onDelete, onStatusChange, onClick }) => {
   const [showMenu, setShowMenu] = useState(false);
+  const [hasUnreadComments, setHasUnreadComments] = useState(false);
   const isOwner = currentUserId === task.user_id;
+
+  useEffect(() => {
+    const checkUnread = () => {
+      const lastRead = localStorage.getItem(`last_read_comments_${task.id}`);
+      const latestComment = task.task_comments && task.task_comments.length > 0
+        ? task.task_comments.reduce((latest, current) => 
+            new Date(current.created_at) > new Date(latest.created_at) ? current : latest
+          )
+        : null;
+
+      if (latestComment && (!lastRead || new Date(latestComment.created_at) > new Date(lastRead))) {
+        setHasUnreadComments(true);
+      } else {
+        setHasUnreadComments(false);
+      }
+    };
+
+    checkUnread();
+
+    const handleCommentsRead = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail?.taskId === task.id) {
+        setHasUnreadComments(false);
+      }
+    };
+
+    window.addEventListener('task-comments-read', handleCommentsRead);
+    return () => window.removeEventListener('task-comments-read', handleCommentsRead);
+  }, [task.id, task.task_comments]);
 
   const statusIcons = {
     todo: <Clock className="w-4 h-4 text-stone-400" />,
@@ -44,71 +75,76 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, currentUserId, onDelet
           statusColors[task.status]
         )}>
           {statusIcons[task.status]}
-          {task.status.replace('-', ' ')}
+          {TASK_STATUS_LABELS[task.status]}
         </span>
-        <div className="relative">
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMenu(!showMenu);
-            }}
-            className="p-1 hover:bg-stone-100 rounded-lg text-stone-400 transition-colors"
-          >
-            <MoreVertical className="w-4 h-4" />
-          </button>
-          
-          {showMenu && (
-            <div 
-              className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-stone-100 py-1 z-10"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStatusChange(task.id, 'todo');
-                  setShowMenu(false);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 flex items-center gap-2"
-              >
-                <Clock className="w-4 h-4" /> Move to To Do
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStatusChange(task.id, 'in-progress');
-                  setShowMenu(false);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 flex items-center gap-2"
-              >
-                <PlayCircle className="w-4 h-4" /> Move to In Progress
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStatusChange(task.id, 'done');
-                  setShowMenu(false);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 flex items-center gap-2"
-              >
-                <CheckCircle2 className="w-4 h-4" /> Move to Done
-              </button>
-              {isOwner && (
-                <>
-                  <div className="h-px bg-stone-100 my-1" />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(task.id);
-                      setShowMenu(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" /> Delete Task
-                  </button>
-                </>
-              )}
-            </div>
+        <div className="flex items-center gap-2">
+          {hasUnreadComments && (
+            <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" title="Có trao đổi mới" />
           )}
+          <div className="relative">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMenu(!showMenu);
+              }}
+              className="p-1 hover:bg-stone-100 rounded-lg text-stone-400 transition-colors"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+            
+            {showMenu && (
+              <div 
+                className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-stone-100 py-1 z-10"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStatusChange(task.id, 'todo');
+                    setShowMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 flex items-center gap-2"
+                >
+                  <Clock className="w-4 h-4" /> Chuyển sang Cần làm
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStatusChange(task.id, 'in-progress');
+                    setShowMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 flex items-center gap-2"
+                >
+                  <PlayCircle className="w-4 h-4" /> Chuyển sang Đang làm
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStatusChange(task.id, 'done');
+                    setShowMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 flex items-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Chuyển sang Hoàn thành
+                </button>
+                {isOwner && (
+                  <>
+                    <div className="h-px bg-stone-100 my-1" />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(task.id);
+                        setShowMenu(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" /> Xoá Task
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -123,7 +159,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, currentUserId, onDelet
         <div className="flex items-center gap-1.5 text-stone-400">
           <Calendar className="w-3.5 h-3.5" />
           <span className="text-[11px] font-medium">
-            {format(new Date(task.created_at), 'MMM d, yyyy')}
+            {format(new Date(task.created_at), 'dd MMM, yyyy', { locale: vi })}
           </span>
         </div>
         <div className="flex -space-x-2 overflow-hidden">

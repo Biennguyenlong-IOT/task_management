@@ -182,15 +182,27 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
           table: 'task_comments',
         },
         (payload) => {
-          console.log('Realtime comment received:', payload);
-          const newComment = payload.new;
-          if (newComment.user_id === user.id) return;
+            console.log('Realtime comment received:', payload);
+            const newComment = payload.new;
+            
+            // Update local state to trigger re-render of TaskCard
+            setTasks(prev => prev.map(task => {
+              if (task.id === newComment.task_id) {
+                return {
+                  ...task,
+                  task_comments: [...(task.task_comments || []), { created_at: newComment.created_at }]
+                };
+              }
+              return task;
+            }));
 
-          const relatedTask = tasksRef.current.find(t => t.id === newComment.task_id);
-          if (relatedTask) {
-            showNotification(`Trao đổi mới từ ${newComment.user_email?.split('@')[0]} trong task: ${relatedTask.title}`, 'info');
+            if (newComment.user_id === user.id) return;
+
+            const relatedTask = tasksRef.current.find(t => t.id === newComment.task_id);
+            if (relatedTask) {
+              showNotification(`Trao đổi mới từ ${newComment.user_email?.split('@')[0]} trong task: ${relatedTask.title}`, 'info');
+            }
           }
-        }
       )
       .subscribe((status) => {
         console.log('Realtime subscription status:', status);
@@ -230,6 +242,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
           task_assignees (
             user_id,
             profiles (email)
+          ),
+          task_comments (
+            created_at
           )
         `)
         .order('position', { ascending: true })
@@ -244,6 +259,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
             task_assignees (
               user_id,
               profiles (email)
+            ),
+            task_comments (
+              created_at
             )
           `)
           .order('created_at', { ascending: false });
@@ -680,7 +698,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
             task={selectedTask}
             userId={user.id}
             userEmail={user.email}
-            onClose={() => setSelectedTask(null)}
+            onClose={() => {
+              window.dispatchEvent(new CustomEvent('task-comments-read', { detail: { taskId: selectedTask?.id } }));
+              setSelectedTask(null);
+            }}
             onStatusChange={updateTaskStatus}
             onDelete={deleteTask}
           />

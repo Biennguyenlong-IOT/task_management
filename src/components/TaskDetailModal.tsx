@@ -32,6 +32,8 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   useEffect(() => {
     fetchProfiles();
     fetchCurrentAssignees();
+    // Mark comments as read
+    localStorage.setItem(`last_read_comments_${task.id}`, new Date().toISOString());
   }, [task.id]);
 
   const fetchProfiles = async () => {

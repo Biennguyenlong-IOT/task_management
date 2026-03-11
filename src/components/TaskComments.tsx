@@ -31,10 +31,17 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ taskId, userId, user
           filter: `task_id=eq.${taskId}`,
         },
         (payload) => {
-          setComments((prev) => [...prev, payload.new as TaskComment]);
+          console.log('New comment received:', payload);
+          setComments((prev) => {
+            // Prevent duplicate comments if the insert also triggered a local state update
+            if (prev.some(c => c.id === payload.new.id)) return prev;
+            return [...prev, payload.new as TaskComment];
+          });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`Realtime subscription status for comments: ${status}`);
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -75,6 +82,8 @@ export const TaskComments: React.FC<TaskCommentsProps> = ({ taskId, userId, user
 
       if (error) throw error;
       setNewComment('');
+      localStorage.setItem(`last_read_comments_${taskId}`, new Date().toISOString());
+      window.dispatchEvent(new CustomEvent('task-comments-read', { detail: { taskId: taskId } }));
     } catch (err) {
       console.error('Error sending comment:', err);
     } finally {
