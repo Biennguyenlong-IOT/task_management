@@ -49,7 +49,7 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, children }) => {
   });
 
   return (
-    <div ref={setNodeRef} className="flex flex-col gap-4 h-[500px] overflow-y-auto scrollbar-hide bg-stone-100/50 p-3 rounded-2xl border border-stone-200/50">
+    <div ref={setNodeRef} className="flex flex-col gap-4 h-[500px] overflow-y-auto scrollbar-hide bg-stone-100/50 p-3 rounded-2xl border border-stone-200/50 touch-pan-y">
       {children}
     </div>
   );

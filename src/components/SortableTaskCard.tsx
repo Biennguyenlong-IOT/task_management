@@ -33,6 +33,7 @@ export const SortableTaskCard: React.FC<SortableTaskCardProps> = (props) => {
     transition,
     opacity: isDragging ? 0.3 : 1,
     cursor: 'grab',
+    touchAction: 'none',
   };
 
   return (
