@@ -57,6 +57,7 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, children }) => {
 
 import { parseISO, formatISO } from 'date-fns';
 import { Notification, NotificationType } from './Notification';
+import { checkAndGenerateMaintenanceTasks } from '../lib/maintenance';
 
 export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -126,6 +127,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
     fetchTasks();
     fetchProfiles();
     updateLastSeen();
+    // checkAndGenerateMaintenanceTasks(user.id).then(() => fetchTasks()); // Đã di chuyển ra ngoài
 
     const lastSeenInterval = setInterval(updateLastSeen, 30000);
 

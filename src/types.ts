@@ -33,6 +33,7 @@ export interface Task {
   start_time?: string | null;
   completion_time?: string | null;
   maintenance_cycle?: string | null;
+  last_generated_at?: string | null;
 }
 
 export interface TaskComment {
