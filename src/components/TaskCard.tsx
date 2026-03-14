@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Task, TaskStatus, TASK_STATUS_LABELS } from '../types';
-import { Calendar, MoreVertical, Trash2, CheckCircle2, Clock, PlayCircle, MessageSquare } from 'lucide-react';
+import { Task, TaskStatus, TASK_STATUS_LABELS, MAINTENANCE_CYCLES } from '../types';
+import { Calendar, MoreVertical, Trash2, CheckCircle2, Clock, PlayCircle, MessageSquare, Repeat } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { motion } from 'motion/react';
@@ -153,6 +153,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, currentUserId, onDelet
         <p className="text-stone-500 text-sm mb-4 line-clamp-2 leading-relaxed">
           {task.description}
         </p>
+      )}
+
+      {task.maintenance_cycle && MAINTENANCE_CYCLES[task.maintenance_cycle] && (
+        <div className="flex items-center gap-1.5 text-emerald-600 mb-2">
+          <Repeat className="w-3.5 h-3.5" />
+          <span className="text-[11px] font-medium">{MAINTENANCE_CYCLES[task.maintenance_cycle]}</span>
+        </div>
       )}
 
       <div className="flex items-center justify-between pt-4 border-top border-stone-100">

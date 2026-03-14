@@ -1,5 +1,13 @@
 export type TaskStatus = 'todo' | 'in-progress' | 'done';
 
+export const MAINTENANCE_CYCLES: Record<string, string> = {
+  'weekly': 'Hằng tuần',
+  'monthly': 'Hằng tháng',
+  '4-months': '4 tháng',
+  '6-months': '6 tháng',
+  'yearly': '1 năm',
+};
+
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   'todo': 'Cần làm',
   'in-progress': 'Đang làm',
@@ -24,6 +32,7 @@ export interface Task {
   position?: number;
   start_time?: string | null;
   completion_time?: string | null;
+  maintenance_cycle?: string | null;
 }
 
 export interface TaskComment {

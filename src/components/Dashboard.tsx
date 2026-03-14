@@ -8,15 +8,17 @@ import {
 } from 'recharts';
 import { 
   TrendingUp, CheckCircle2, Clock as ClockIcon, PlayCircle, Users, 
-  X, LogOut, RefreshCw, LayoutGrid, Activity, BarChart3, PieChart as PieChartIcon
+  X, LogOut, RefreshCw, LayoutGrid, Activity, BarChart3, PieChart as PieChartIcon, Calendar as CalendarIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Notification, NotificationType } from './Notification';
+import WeatherWidget from './WeatherWidget';
 import { Clock } from './Clock';
-import { Calendar } from './Calendar';
+import { Calendar as CalendarComponent } from './Calendar';
 
 interface DashboardProps {
   onBack: () => void;
+  onViewMaintenance: () => void;
   user: User;
 }
 
@@ -47,7 +49,7 @@ const StatCard = ({ title, value, icon, color, onClick, subtitle, isLink }: any)
   );
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance, user }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const tasksRef = useRef<Task[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
@@ -178,6 +180,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
             <button onClick={onBack} className="flex items-center gap-2 px-5 py-2.5 bg-stone-900 text-white rounded-xl text-sm font-semibold hover:bg-stone-800 transition-all shadow-md">
               <LayoutGrid size={18} /> Bảng điều khiển
             </button>
+            <button onClick={onViewMaintenance} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-all shadow-md">
+              <CalendarIcon size={18} /> Bảo trì
+            </button>
             <button 
               onClick={async () => {
                 await supabase.from('profiles').update({ last_seen: null }).eq('id', user.id);
@@ -228,7 +233,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
           </div>
 
           <div className="bg-white p-6 rounded-[2.5rem] border border-stone-200/60 shadow-sm flex items-center justify-center">
-            <Calendar />
+            <CalendarComponent />
           </div>
         </motion.div>
 
@@ -275,6 +280,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, user }) => {
           {/* CỘT PHẢI - Tiện ích */}
           <div className="col-span-12 lg:col-span-4 space-y-8">
             
+            {/* Weather Widget */}
+            <WeatherWidget />
+
             {/* Pie Chart Widget */}
             <section className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm">
               <h2 className="font-sans font-bold text-xl mb-8 flex items-center gap-3">

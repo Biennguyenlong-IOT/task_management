@@ -49,7 +49,7 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, children }) => {
   });
 
   return (
-    <div ref={setNodeRef} className="flex flex-col gap-4 h-[500px] overflow-y-auto scrollbar-hide bg-stone-100/50 p-3 rounded-2xl border border-stone-200/50 touch-pan-y">
+    <div ref={setNodeRef} className="flex flex-col gap-4 bg-stone-100/50 p-3 rounded-2xl border border-stone-200/50">
       {children}
     </div>
   );
@@ -68,6 +68,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
   const [newTaskAssignees, setNewTaskAssignees] = useState<string[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAllCompleted, setShowAllCompleted] = useState(false);
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const tasksRef = useRef<Task[]>([]);
 
@@ -633,27 +634,31 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
         onDragEnd={handleDragEnd}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {columns.map((column) => (
-            <div key={column.id} className="flex flex-col gap-4">
-              <div className="flex items-center justify-between px-2">
-                <div className="flex items-center gap-2">
-                  <span className={column.color}>{column.icon}</span>
-                  <h2 className="font-medium text-stone-900">{column.title}</h2>
-                  <span className="bg-stone-200 text-stone-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    {filteredTasks.filter((t) => t.status === column.id).length}
-                  </span>
+          {columns.map((column) => {
+            const tasksInColumn = filteredTasks.filter((t) => t.status === column.id);
+            const displayedTasks = column.id === 'done' && !showAllCompleted 
+              ? tasksInColumn.slice(0, 5) 
+              : tasksInColumn;
+
+            return (
+              <div key={column.id} className="flex flex-col gap-4">
+                <div className="flex items-center justify-between px-2">
+                  <div className="flex items-center gap-2">
+                    <span className={column.color}>{column.icon}</span>
+                    <h2 className="font-medium text-stone-900">{column.title}</h2>
+                    <span className="bg-stone-200 text-stone-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      {tasksInColumn.length}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              
-              <DroppableColumn id={column.id}>
-                <SortableContext
-                  items={filteredTasks.filter((t) => t.status === column.id).map(t => t.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <AnimatePresence mode="popLayout">
-                    {filteredTasks
-                      .filter((t) => t.status === column.id)
-                      .map((task) => (
+                
+                <DroppableColumn id={column.id}>
+                  <SortableContext
+                    items={tasksInColumn.map(t => t.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <AnimatePresence mode="popLayout">
+                      {displayedTasks.map((task) => (
                         <SortableTaskCard
                           key={task.id}
                           task={task}
@@ -663,17 +668,27 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
                           onClick={setSelectedTask}
                         />
                       ))}
-                  </AnimatePresence>
-                </SortableContext>
-                
-                {filteredTasks.filter((t) => t.status === column.id).length === 0 && (
-                  <div className="flex-1 flex flex-col items-center justify-center text-stone-400 py-12 px-4 text-center pointer-events-none">
-                    <p className="text-sm italic mb-2">Kéo thả vào đây</p>
-                  </div>
-                )}
-              </DroppableColumn>
-            </div>
-          ))}
+                    </AnimatePresence>
+                  </SortableContext>
+                  
+                  {column.id === 'done' && tasksInColumn.length > 5 && (
+                    <button 
+                      onClick={() => setShowAllCompleted(!showAllCompleted)}
+                      className="mt-2 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+                    >
+                      {showAllCompleted ? 'Ẩn bớt' : `Xem tất cả (${tasksInColumn.length})`}
+                    </button>
+                  )}
+                  
+                  {tasksInColumn.length === 0 && (
+                    <div className="flex-1 flex flex-col items-center justify-center text-stone-400 py-12 px-4 text-center pointer-events-none">
+                      <p className="text-sm italic mb-2">Kéo thả vào đây</p>
+                    </div>
+                  )}
+                </DroppableColumn>
+              </div>
+            );
+          })}
         </div>
 
         <DragOverlay adjustScale={false}>
