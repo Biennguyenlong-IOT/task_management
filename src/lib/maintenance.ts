@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Task } from '../types';
-import { addDays, addMonths, addYears, isBefore, parseISO } from 'date-fns';
+import { addDays, addMonths, addYears, isBefore, parseISO, startOfWeek, startOfMonth } from 'date-fns';
 
 export const checkAndGenerateMaintenanceTasks = async (user_id: string) => {
   const { data: maintenanceTasks, error } = await supabase
@@ -15,31 +15,59 @@ export const checkAndGenerateMaintenanceTasks = async (user_id: string) => {
 
   for (const task of maintenanceTasks) {
     let shouldGenerate = false;
-    let nextGenerationDate = null;
+    let targetDate = null;
+
+    switch (task.maintenance_cycle) {
+      case 'daily':
+        // Hằng ngày
+        targetDate = new Date(now.setHours(0, 0, 0, 0));
+        break;
+      case 'weekly':
+        // Thứ 7 hàng tuần (Tuần bắt đầu từ Thứ 7)
+        targetDate = startOfWeek(now, { weekStartsOn: 6 });
+        break;
+      case 'monthly':
+        // Ngày đầu tháng
+        targetDate = startOfMonth(now);
+        break;
+      case '4-months':
+        if (task.last_generated_at) {
+          targetDate = addMonths(parseISO(task.last_generated_at), 4);
+        }
+        break;
+      case '6-months':
+        if (task.last_generated_at) {
+          targetDate = addMonths(parseISO(task.last_generated_at), 6);
+        }
+        break;
+      case 'yearly':
+        if (task.last_generated_at) {
+          targetDate = addYears(parseISO(task.last_generated_at), 1);
+        }
+        break;
+    }
 
     if (!task.last_generated_at) {
-      shouldGenerate = true;
+      // Nếu chưa bao giờ tạo, và là daily/weekly/monthly thì kiểm tra xem đã đến ngày chưa
+      if (['daily', 'weekly', 'monthly'].includes(task.maintenance_cycle || '')) {
+        shouldGenerate = true; // Tạo ngay lần đầu tiên nếu chưa có
+      } else {
+        shouldGenerate = true;
+      }
     } else {
       const lastGen = parseISO(task.last_generated_at);
-      switch (task.maintenance_cycle) {
-        case 'weekly':
-          nextGenerationDate = addDays(lastGen, 7);
-          break;
-        case 'monthly':
-          nextGenerationDate = addMonths(lastGen, 1);
-          break;
-        case '4-months':
-          nextGenerationDate = addMonths(lastGen, 4);
-          break;
-        case '6-months':
-          nextGenerationDate = addMonths(lastGen, 6);
-          break;
-        case 'yearly':
-          nextGenerationDate = addYears(lastGen, 1);
-          break;
-      }
-      if (nextGenerationDate && isBefore(nextGenerationDate, now)) {
-        shouldGenerate = true;
+      if (targetDate && (isBefore(lastGen, targetDate) || lastGen.getTime() === targetDate.getTime())) {
+        // Đối với daily/weekly/monthly, nếu lastGen trước targetDate (ngày bắt đầu chu kỳ hiện tại)
+        if (['daily', 'weekly', 'monthly'].includes(task.maintenance_cycle || '')) {
+          if (isBefore(lastGen, targetDate)) {
+            shouldGenerate = true;
+          }
+        } else {
+          // Đối với các chu kỳ khác, dùng logic cộng dồn
+          if (isBefore(targetDate, now)) {
+            shouldGenerate = true;
+          }
+        }
       }
     }
 
@@ -66,8 +94,14 @@ export const checkAndGenerateMaintenanceTasks = async (user_id: string) => {
         continue;
       }
 
+      // Lấy danh sách nhân viên được giao từ task bảo trì gốc
+      const { data: assignees } = await supabase
+        .from('task_assignees')
+        .select('user_id')
+        .eq('task_id', task.id);
+
       // Create new task instance
-      const { error: insertError } = await supabase.from('tasks').insert([
+      const { data: newTask, error: insertError } = await supabase.from('tasks').insert([
         {
           title: task.title,
           description: task.description,
@@ -75,9 +109,19 @@ export const checkAndGenerateMaintenanceTasks = async (user_id: string) => {
           user_id: user_id,
           maintenance_cycle: null, // Regular task
         },
-      ]);
+      ]).select();
 
-      if (!insertError) {
+      if (!insertError && newTask && newTask[0]) {
+        // Giao việc cho nhân viên giống task gốc
+        if (assignees && assignees.length > 0) {
+          await supabase.from('task_assignees').insert(
+            assignees.map(a => ({
+              task_id: newTask[0].id,
+              user_id: a.user_id
+            }))
+          );
+        }
+
         // Update last_generated_at của task gốc
         await supabase
           .from('tasks')

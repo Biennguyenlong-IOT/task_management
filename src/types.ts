@@ -1,6 +1,7 @@
 export type TaskStatus = 'todo' | 'in-progress' | 'done';
 
 export const MAINTENANCE_CYCLES: Record<string, string> = {
+  'daily': 'Hằng ngày',
   'weekly': 'Hằng tuần',
   'monthly': 'Hằng tháng',
   '4-months': '4 tháng',
