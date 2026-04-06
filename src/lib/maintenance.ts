@@ -100,15 +100,16 @@ export const checkAndGenerateMaintenanceTasks = async (user_id: string) => {
 
     if (shouldGenerate) {
       console.log('Attempting to generate task...');
-      // Kiểm tra xem đã có task nào được tạo từ task bảo trì này trong ngày hôm nay chưa
-      const todayStart = new Date(currentNow.setHours(0, 0, 0, 0));
+      // Kiểm tra xem đã có task nào được tạo từ task bảo trì này trong chu kỳ hiện tại chưa
+      // Sử dụng parent_maintenance_id để kiểm tra chính xác task được tạo từ kế hoạch này
+      const checkStartDate = targetDate || new Date(currentNow.setHours(0, 0, 0, 0));
       const { data: existingTasks, error: checkError } = await supabase
         .from('tasks')
         .select('id')
-        .eq('title', task.title)
+        .eq('parent_maintenance_id', task.id)
         .eq('user_id', user_id)
         .is('maintenance_cycle', null)
-        .gte('created_at', todayStart.toISOString());
+        .gte('created_at', checkStartDate.toISOString());
 
       if (checkError) {
         console.error('Error checking existing tasks:', checkError);
@@ -139,6 +140,7 @@ export const checkAndGenerateMaintenanceTasks = async (user_id: string) => {
           status: 'todo',
           user_id: user_id,
           maintenance_cycle: null, // Regular task
+          parent_maintenance_id: task.id, // Lưu ID của task bảo trì gốc để kiểm tra trùng lặp chính xác hơn
         },
       ]).select();
 
