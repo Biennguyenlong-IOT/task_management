@@ -4,17 +4,24 @@ import { User } from '@supabase/supabase-js';
 import { Task, UserProfile } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, Legend 
+  PieChart, Pie, Cell, Legend, LineChart, Line, AreaChart, Area
 } from 'recharts';
 import { 
   TrendingUp, CheckCircle2, Clock as ClockIcon, PlayCircle, Users, 
-  X, LogOut, RefreshCw, LayoutGrid, Activity, BarChart3, PieChart as PieChartIcon, Calendar as CalendarIcon
+  X, LogOut, RefreshCw, LayoutGrid, Activity, BarChart3, PieChart as PieChartIcon, Calendar as CalendarIcon,
+  ArrowUpRight, ArrowDownRight, CalendarDays, CalendarRange
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Notification, NotificationType } from './Notification';
 import WeatherWidget from './WeatherWidget';
 import { Clock } from './Clock';
 import { Calendar as CalendarComponent } from './Calendar';
+import { 
+  startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear,
+  subWeeks, subMonths, isWithinInterval, parseISO, format, eachDayOfInterval,
+  isSameDay, subDays
+} from 'date-fns';
+import { vi } from 'date-fns/locale';
 
 interface DashboardProps {
   onBack: () => void;
@@ -126,7 +133,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
     };
   }, []);
 
-  // TÍNH TOÁN DỮ LIỆU
+  // TÍNH TOÁN DỮ LIỆU THỐNG KÊ
+  const now = new Date();
+  
+  // Tuần này
+  const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+  const tasksThisWeek = tasks.filter(t => t.completion_time && isWithinInterval(parseISO(t.completion_time), { start: weekStart, end: weekEnd })).length;
+  
+  // Tuần trước
+  const lastWeekStart = startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 });
+  const lastWeekEnd = endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 });
+  const tasksLastWeek = tasks.filter(t => t.completion_time && isWithinInterval(parseISO(t.completion_time), { start: lastWeekStart, end: lastWeekEnd })).length;
+  
+  // Tháng này
+  const monthStart = startOfMonth(now);
+  const monthEnd = endOfMonth(now);
+  const tasksThisMonth = tasks.filter(t => t.completion_time && isWithinInterval(parseISO(t.completion_time), { start: monthStart, end: monthEnd })).length;
+  
+  // Tháng trước
+  const lastMonthStart = startOfMonth(subMonths(now, 1));
+  const lastMonthEnd = endOfMonth(subMonths(now, 1));
+  const tasksLastMonth = tasks.filter(t => t.completion_time && isWithinInterval(parseISO(t.completion_time), { start: lastMonthStart, end: lastMonthEnd })).length;
+
+  // Năm này
+  const yearStart = startOfYear(now);
+  const yearEnd = endOfYear(now);
+  const tasksThisYear = tasks.filter(t => t.completion_time && isWithinInterval(parseISO(t.completion_time), { start: yearStart, end: yearEnd })).length;
+
+  // Dữ liệu biểu đồ 7 ngày gần nhất
+  const last7Days = eachDayOfInterval({
+    start: subDays(now, 6),
+    end: now
+  }).map(date => {
+    const dayTasks = tasks.filter(t => t.completion_time && isSameDay(parseISO(t.completion_time), date)).length;
+    return {
+      name: format(date, 'EEE', { locale: vi }),
+      value: dayTasks
+    };
+  });
+
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter(t => t.status === 'done').length;
   const inProgressTasks = tasks.filter(t => t.status === 'in-progress').length;
@@ -246,10 +292,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
             {/* Grid Thẻ thống kê */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <StatCard title="Tổng Task" value={totalTasks} icon={<Activity />} color="stone" />
-              <StatCard title="Hoàn Thành" value={doneTasks} icon={<CheckCircle2 />} color="emerald" subtitle={`${completionRate}% tiến độ`} />
-              <StatCard title="Đang Chạy" value={inProgressTasks} icon={<PlayCircle />} color="amber" onClick={onBack} isLink />
-              <StatCard title="Nhân Sự" value={profiles.length} icon={<Users />} color="blue" onClick={() => setShowPersonnel(true)} isLink subtitle={`${onlineUsers.length} trực tuyến`} />
+              <StatCard title="Tuần này" value={tasksThisWeek} icon={<CalendarDays />} color="blue" subtitle={`${tasksLastWeek > 0 ? (tasksThisWeek >= tasksLastWeek ? '+' : '-') + Math.abs(Math.round(((tasksThisWeek - tasksLastWeek) / tasksLastWeek) * 100)) + '%' : 'Mới'} so với tuần trước`} />
+              <StatCard title="Tháng này" value={tasksThisMonth} icon={<CalendarRange />} color="amber" subtitle={`${tasksLastMonth > 0 ? (tasksThisMonth >= tasksLastMonth ? '+' : '-') + Math.abs(Math.round(((tasksThisMonth - tasksLastMonth) / tasksLastMonth) * 100)) + '%' : 'Mới'} so với tháng trước`} />
+              <StatCard title="Năm này" value={tasksThisYear} icon={<TrendingUp />} color="emerald" subtitle="Tổng hoàn thành" />
             </div>
+
+            {/* Biểu đồ xu hướng 7 ngày */}
+            <section className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between mb-10">
+                <h2 className="font-sans font-bold text-xl flex items-center gap-3">
+                  <Activity size={24} className="text-stone-300" /> Xu hướng hoàn thành (7 ngày)
+                </h2>
+              </div>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={last7Days}>
+                    <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="8 8" vertical={false} stroke="#F1F1EF" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#78716c', fontSize: 12, fontWeight: 500 }} dy={15} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#78716c', fontSize: 12 }} />
+                    <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.05)' }} />
+                    <Area type="monotone" dataKey="value" name="Hoàn thành" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
 
             {/* Biểu đồ phân bổ nhân sự */}
             <section className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm overflow-hidden">
