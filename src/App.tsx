@@ -7,6 +7,7 @@ import { MaintenancePlan } from './components/MaintenancePlan';
 import { ConfigRequired } from './components/ConfigRequired';
 import { User } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
+import { checkAndGenerateMaintenanceTasks } from './lib/maintenance';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -32,6 +33,9 @@ export default function App() {
         setUser(null);
       } else {
         setUser(session?.user ?? null);
+        if (session?.user) {
+          checkAndGenerateMaintenanceTasks(session.user.id);
+        }
       }
       setLoading(false);
     }).catch(err => {
@@ -44,10 +48,23 @@ export default function App() {
     // Listen for changes on auth state (sign in, sign out, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) {
+        checkAndGenerateMaintenanceTasks(session.user.id);
+      }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    // Tự động kiểm tra task bảo trì mỗi giờ
+    const maintenanceInterval = setInterval(() => {
+      if (user?.id) {
+        checkAndGenerateMaintenanceTasks(user.id);
+      }
+    }, 3600000); // 1 giờ
+
+    return () => {
+      subscription.unsubscribe();
+      clearInterval(maintenanceInterval);
+    };
+  }, [user?.id]);
 
   if (loading) {
     return (
