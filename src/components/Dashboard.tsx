@@ -19,7 +19,7 @@ import { Calendar as CalendarComponent } from './Calendar';
 import { 
   startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear,
   subWeeks, subMonths, isWithinInterval, parseISO, format, eachDayOfInterval,
-  isSameDay, subDays
+  isSameDay, subDays, differenceInMinutes
 } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
@@ -65,6 +65,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [dbNotification, setDbNotification] = useState<{ message: string, type: NotificationType } | null>(null);
 
+  const isOnline = (lastSeen: string | null | undefined) => {
+    if (!lastSeen) return false;
+    try {
+      return differenceInMinutes(new Date(), parseISO(lastSeen)) < 2;
+    } catch (e) {
+      return false;
+    }
+  };
+
   const showDbNotification = (message: string, type: NotificationType = 'info') => {
     setDbNotification({ message, type });
   };
@@ -87,9 +96,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
       tasksRef.current = relatedTasks;
       setProfiles(profilesRes.data || []);
       
-      // Update online status logic
-      const currentOnline = (profilesRes.data || []).filter(p => p.last_seen !== null).map(p => p.id);
-      console.log('Online users:', currentOnline, 'Profiles:', profilesRes.data);
+      // Update online status logic (within 2 minutes)
+      const currentOnline = (profilesRes.data || [])
+        .filter(p => isOnline(p.last_seen))
+        .map(p => p.id);
       setOnlineUsers(currentOnline);
     } catch (err: any) {
       showDbNotification('Lỗi tải dữ liệu: ' + err.message, 'error');
@@ -121,14 +131,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
         const { data } = await supabase.from('profiles').select('*');
         if (data) {
           setProfiles(data);
-          const currentOnline = data.filter(p => p.last_seen !== null).map(p => p.id);
+          const currentOnline = data.filter(p => isOnline(p.last_seen)).map(p => p.id);
           setOnlineUsers(currentOnline);
         }
       })
       .subscribe();
 
+    // Cập nhật danh sách online mỗi phút để loại bỏ user đã offline quá 2 phút
+    const onlineRefreshInterval = setInterval(() => {
+      setProfiles(prev => {
+        const currentOnline = prev.filter(p => isOnline(p.last_seen)).map(p => p.id);
+        setOnlineUsers(currentOnline);
+        return [...prev];
+      });
+    }, 60000);
+
     return () => {
       clearInterval(interval);
+      clearInterval(onlineRefreshInterval);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -372,6 +392,41 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
                 </ResponsiveContainer>
               </div>
             </section>
+
+            {/* Online Users Widget - Đặc biệt cho biennguyenlong@gmail.com */}
+            {user.email === 'biennguyenlong@gmail.com' && (
+              <section className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="font-sans font-bold text-xl flex items-center gap-3">
+                    <Users size={22} className="text-stone-300" /> Đang trực tuyến
+                  </h2>
+                  <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                    {onlineUsers.length} Active
+                  </span>
+                </div>
+                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  {profiles.filter(p => onlineUsers.includes(p.id) || p.id === user.id).map(p => (
+                    <div key={p.id} className="flex items-center gap-3 p-3 rounded-2xl bg-stone-50 border border-stone-100">
+                      <div className="relative">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center font-bold text-stone-900 border border-stone-200 shadow-sm text-sm">
+                          {p.display_name?.[0] || p.email[0].toUpperCase()}
+                        </div>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-stone-50 rounded-full"></div>
+                      </div>
+                      <div className="overflow-hidden">
+                        <div className="font-bold text-sm text-stone-900 truncate">
+                          {p.display_name || p.email.split('@')[0]}
+                        </div>
+                        <div className="text-[10px] text-stone-400 font-medium truncate">{p.email}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {onlineUsers.length === 0 && (
+                    <p className="text-center text-stone-400 text-sm py-4">Không có ai trực tuyến</p>
+                  )}
+                </div>
+              </section>
+            )}
           </div>
         </div>
       </div>
@@ -394,7 +449,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
               </div>
               <div className="p-8 max-h-[50vh] overflow-y-auto space-y-4 custom-scrollbar">
                 {profiles.map(p => {
-                   const isUserOnline = onlineUsers.includes(p.id) || p.id === user.id;
+                   const isUserOnline = isOnline(p.last_seen) || p.id === user.id;
                    return (
                     <div key={p.id} className="flex items-center justify-between p-5 rounded-[1.5rem] bg-[#F9F8F6] border border-stone-200/50 hover:border-stone-300 transition-colors">
                       <div className="flex items-center gap-4">
