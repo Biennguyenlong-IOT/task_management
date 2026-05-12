@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task, TaskStatus, UserProfile } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Calendar, Clock, PlayCircle, CheckCircle2, MessageSquare, User as UserIcon, Loader2, Plus } from 'lucide-react';
+import { X, Calendar, Clock, PlayCircle, CheckCircle2, MessageSquare, User as UserIcon, Loader2, Plus, Pencil, Check } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { TaskComments } from './TaskComments';
 import { cn } from '../lib/utils';
@@ -13,6 +13,7 @@ interface TaskDetailModalProps {
   userEmail: string | undefined;
   onClose: () => void;
   onStatusChange: (id: string, status: TaskStatus) => void;
+  onUpdate: (id: string, updates: Partial<Task>) => void;
   onDelete: (id: string) => void;
 }
 
@@ -22,12 +23,18 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   userEmail, 
   onClose,
   onStatusChange,
+  onUpdate,
   onDelete
 }) => {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [currentAssignees, setCurrentAssignees] = useState<string[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
   const [updatingAssignee, setUpdatingAssignee] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(task.title);
+  const [editedStartTime, setEditedStartTime] = useState(task.start_time ? task.start_time.substring(0, 16) : '');
+  const [editedCompletionTime, setEditedCompletionTime] = useState(task.completion_time ? task.completion_time.substring(0, 16) : '');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetchProfiles();
@@ -35,6 +42,39 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     // Mark comments as read
     localStorage.setItem(`last_read_comments_${task.id}`, new Date().toISOString());
   }, [task.id]);
+
+  useEffect(() => {
+    setEditedTitle(task.title);
+    setEditedStartTime(task.start_time ? task.start_time.substring(0, 16) : '');
+    setEditedCompletionTime(task.completion_time ? task.completion_time.substring(0, 16) : '');
+  }, [task.id, task.title, task.start_time, task.completion_time]);
+
+  const handleSaveEdit = async () => {
+    if (!editedTitle.trim()) return;
+    setIsSaving(true);
+    try {
+      const updates: Partial<Task> = {
+        title: editedTitle,
+        start_time: editedStartTime ? new Date(editedStartTime).toISOString() : null,
+        completion_time: editedCompletionTime ? new Date(editedCompletionTime).toISOString() : null,
+      };
+
+      const { error } = await supabase
+        .from('tasks')
+        .update(updates)
+        .eq('id', task.id);
+
+      if (error) throw error;
+      
+      onUpdate(task.id, updates);
+      setIsEditing(false);
+    } catch (err: any) {
+      console.error('Error updating task:', err);
+      alert('Không thể cập nhật task: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const fetchProfiles = async () => {
     try {
@@ -135,32 +175,105 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             </button>
           </div>
 
-          <h2 className="text-3xl font-sans font-medium text-stone-900 mb-4 leading-tight">
-            {task.title}
-          </h2>
-          
-          <div className="flex flex-wrap items-center gap-6 text-stone-400 mb-8">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-4 h-4" />
-              <span className="text-xs font-medium">
-                Tạo ngày {format(parseISO(task.created_at), 'dd/MM/yyyy')}
-              </span>
-            </div>
-            {task.start_time && (
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-amber-500" />
-                <span className="text-xs font-medium">
-                  Bắt đầu: {format(parseISO(task.start_time), 'dd/MM/yyyy HH:mm')}
-                </span>
+          <div className="group relative mb-4">
+            {isEditing ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 ml-1">Tiêu đề</label>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    className="w-full text-2xl font-sans font-medium text-stone-900 px-3 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-stone-50/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 ml-1">Ngày giờ thực hiện (Bắt đầu)</label>
+                  <input
+                    type="datetime-local"
+                    value={editedStartTime}
+                    onChange={(e) => setEditedStartTime(e.target.value)}
+                    className="w-full text-sm font-medium text-stone-600 px-3 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-stone-50/50"
+                  />
+                </div>
+                {task.status === 'done' && (
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 ml-1">Ngày giờ hoàn thành</label>
+                    <input
+                      type="datetime-local"
+                      value={editedCompletionTime}
+                      onChange={(e) => setEditedCompletionTime(e.target.value)}
+                      className="w-full text-sm font-medium text-stone-600 px-3 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-stone-50/50"
+                    />
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    disabled={isSaving}
+                    onClick={handleSaveEdit}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-900/20 hover:bg-emerald-700 transition-all disabled:opacity-50"
+                  >
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    Lưu thay đổi
+                  </button>
+                  <button
+                    disabled={isSaving}
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditedTitle(task.title);
+                      setEditedStartTime(task.start_time ? task.start_time.substring(0, 16) : '');
+                      setEditedCompletionTime(task.completion_time ? task.completion_time.substring(0, 16) : '');
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-stone-100 text-stone-600 rounded-xl text-sm font-bold hover:bg-stone-200 transition-all disabled:opacity-50"
+                  >
+                    <X className="w-4 h-4" />
+                    Hủy
+                  </button>
+                </div>
               </div>
-            )}
-            {task.completion_time && (
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                <span className="text-xs font-medium">
-                  Hoàn thành: {format(parseISO(task.completion_time), 'dd/MM/yyyy HH:mm')}
-                </span>
-              </div>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-4">
+                  <h2 className="text-3xl font-sans font-medium text-stone-900 leading-tight">
+                    {task.title}
+                  </h2>
+                  {task.user_id === userId && (
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="p-2 text-stone-400 hover:text-stone-900 hover:bg-stone-100 rounded-xl transition-all"
+                      title="Chỉnh sửa tiêu đề và ngày giờ"
+                    >
+                      <Pencil className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-6 text-stone-400 mt-4 mb-4">
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4" />
+                    <span className="text-xs font-medium">
+                      Tạo ngày {format(parseISO(task.created_at), 'dd/MM/yyyy')}
+                    </span>
+                  </div>
+                  {task.start_time && (
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-amber-500" />
+                      <span className="text-xs font-medium">
+                        Bắt đầu: {format(parseISO(task.start_time), 'dd/MM/yyyy HH:mm')}
+                      </span>
+                    </div>
+                  )}
+                  {task.completion_time && (
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                      <span className="text-xs font-medium">
+                        Hoàn thành: {format(parseISO(task.completion_time), 'dd/MM/yyyy HH:mm')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
 
