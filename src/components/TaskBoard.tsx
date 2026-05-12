@@ -71,6 +71,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
   const [searchQuery, setSearchQuery] = useState('');
   const [showAllCompleted, setShowAllCompleted] = useState(false);
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const tasksRef = useRef<Task[]>([]);
 
   useEffect(() => {
@@ -309,8 +310,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
 
   const createTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTask.title.trim()) return;
+    if (!newTask.title.trim() || isSubmitting) return;
 
+    setIsSubmitting(true);
     try {
       const maxPos = tasks.length > 0 
         ? Math.max(...tasks.map(t => t.position || 0)) 
@@ -355,6 +357,15 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
     } catch (err: any) {
       console.error('Error creating task:', err);
       showNotification('Không thể tạo task: ' + (err.message || 'Lỗi không xác định'), 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const updateTaskData = (id: string, updates: Partial<Task>) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    if (selectedTask?.id === id) {
+      setSelectedTask(prev => prev ? { ...prev, ...updates } : null);
     }
   };
 
@@ -720,6 +731,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
               setSelectedTask(null);
             }}
             onStatusChange={updateTaskStatus}
+            onUpdate={updateTaskData}
             onDelete={deleteTask}
           />
         )}
@@ -824,9 +836,20 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 px-4 py-3 rounded-xl bg-stone-900 text-white font-medium hover:bg-stone-800 transition-all shadow-lg shadow-stone-900/20"
+                      disabled={isSubmitting}
+                      className={cn(
+                        "flex-1 px-4 py-3 rounded-xl bg-stone-900 text-white font-medium hover:bg-stone-800 transition-all shadow-lg shadow-stone-900/20 flex items-center justify-center gap-2",
+                        isSubmitting && "opacity-70 cursor-not-allowed"
+                      )}
                     >
-                      Create Task
+                      {isSubmitting ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        'Create Task'
+                      )}
                     </button>
                   </div>
                 </form>
