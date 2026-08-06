@@ -9,13 +9,24 @@ export const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     // Check if we are in a password reset flow (Supabase adds a type=recovery hash)
-    if (window.location.hash.includes('type=recovery')) {
+    if (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
       setMode('reset_password');
     }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setMode('reset_password');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -40,16 +51,32 @@ export const Auth: React.FC = () => {
           await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', data.user.id);
         }
       } else if (mode === 'forgot_password') {
+        const redirectTo = `${window.location.origin}${window.location.pathname}`;
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: 'https://task-management-biennguyen.vercel.app',
+          redirectTo,
         });
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Liên kết đặt lại mật khẩu đã được gửi vào email của bạn!' });
+        setMessage({ type: 'success', text: 'Liên kết đặt lại mật khẩu đã được gửi vào email của bạn! Vui lòng kiểm tra hộp thư.' });
       } else if (mode === 'reset_password') {
+        if (password.length < 6) {
+          throw new Error('Mật khẩu mới phải có ít nhất 6 ký tự.');
+        }
+        if (password !== confirmPassword) {
+          throw new Error('Mật khẩu xác nhận không khớp.');
+        }
+
         const { error } = await supabase.auth.updateUser({ password });
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Mật khẩu đã được cập nhật thành công! Đang chuyển hướng...' });
-        setTimeout(() => setMode('login'), 2000);
+
+        setMessage({ 
+          type: 'success', 
+          text: 'Mật khẩu mới đã được cập nhật và lưu thành công trên Supabase! Đang chuyển hướng về trang đăng nhập...' 
+        });
+        setTimeout(() => {
+          setMode('login');
+          setPassword('');
+          setConfirmPassword('');
+        }, 2500);
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Đã có lỗi xảy ra' });
@@ -112,33 +139,54 @@ export const Auth: React.FC = () => {
           )}
 
           {mode !== 'forgot_password' && (
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-widest text-stone-400 mb-2 ml-1">
-                {mode === 'reset_password' ? 'Mật khẩu mới' : 'Mật khẩu'}
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-300" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-stone-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all bg-stone-50/50"
-                  placeholder="••••••••"
-                  required
-                />
+            <>
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-widest text-stone-400 mb-2 ml-1">
+                  {mode === 'reset_password' ? 'Mật khẩu mới' : 'Mật khẩu'}
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-300" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-stone-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all bg-stone-50/50"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+                {mode === 'login' && (
+                  <div className="flex justify-end mt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setMode('forgot_password')}
+                      className="text-xs font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
+                    >
+                      Quên mật khẩu?
+                    </button>
+                  </div>
+                )}
               </div>
-              {mode === 'login' && (
-                <div className="flex justify-end mt-2">
-                  <button 
-                    type="button"
-                    onClick={() => setMode('forgot_password')}
-                    className="text-xs font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
-                  >
-                    Quên mật khẩu?
-                  </button>
+
+              {mode === 'reset_password' && (
+                <div>
+                  <label className="block text-xs font-medium uppercase tracking-widest text-stone-400 mb-2 ml-1">
+                    Xác nhận mật khẩu mới
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-300" />
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-stone-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all bg-stone-50/50"
+                      placeholder="••••••••"
+                      required
+                    />
+                  </div>
                 </div>
               )}
-            </div>
+            </>
           )}
 
           <button
