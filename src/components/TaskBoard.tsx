@@ -5,7 +5,8 @@ import { Task, TaskStatus, UserProfile } from '../types';
 import { TaskCard } from './TaskCard';
 import { SortableTaskCard } from './SortableTaskCard';
 import { TaskDetailModal } from './TaskDetailModal';
-import { Plus, LogOut, LayoutGrid, List, CheckCircle2, Clock, PlayCircle, Search, GripVertical, BarChart3 } from 'lucide-react';
+import { ChangePasswordModal } from './ChangePasswordModal';
+import { Plus, LogOut, LayoutGrid, List, CheckCircle2, Clock, PlayCircle, Search, GripVertical, BarChart3, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import {
@@ -72,6 +73,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
   const [showAllCompleted, setShowAllCompleted] = useState(false);
   const [notification, setNotification] = useState<{ message: string, type: NotificationType } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const tasksRef = useRef<Task[]>([]);
 
   useEffect(() => {
@@ -605,6 +607,13 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
             <Plus className="w-4 h-4" /> New Task
           </button>
           <button
+            onClick={() => setIsChangePasswordOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200/60 rounded-xl font-medium hover:bg-amber-100/80 transition-all shadow-sm"
+            title="Đổi mật khẩu"
+          >
+            <KeyRound className="w-4 h-4" /> Đổi mật khẩu
+          </button>
+          <button
             onClick={async () => {
               try {
                 // Set last_seen to null on logout
@@ -850,6 +859,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
         message={notification?.message || null} 
         type={notification?.type || 'info'} 
         onClose={() => setNotification(null)} 
+      />
+      <ChangePasswordModal 
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+        userEmail={user.email}
       />
     </div>
   );
