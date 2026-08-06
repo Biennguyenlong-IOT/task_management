@@ -63,12 +63,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
   const [loading, setLoading] = useState(true);
   const [showPersonnel, setShowPersonnel] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [presenceUsers, setPresenceUsers] = useState<string[]>([]);
   const [dbNotification, setDbNotification] = useState<{ message: string, type: NotificationType } | null>(null);
 
-  const isOnline = (lastSeen: string | null | undefined) => {
+  const isDbOnline = (lastSeen: string | null | undefined) => {
     if (!lastSeen) return false;
     try {
-      return differenceInMinutes(new Date(), parseISO(lastSeen)) < 2;
+      const diffSeconds = Math.abs((new Date().getTime() - parseISO(lastSeen).getTime()) / 1000);
+      return diffSeconds <= 300; // 5 phút (có bù chênh lệch múi giờ/đồng hồ hệ thống giữa các máy)
     } catch (e) {
       return false;
     }
@@ -78,15 +80,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
     setDbNotification({ message, type });
   };
 
+  const ensureProfile = async () => {
+    if (!user) return;
+    try {
+      const nowIso = new Date().toISOString();
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        email: user.email,
+        display_name: user.email?.split('@')[0],
+        last_seen: nowIso
+      }, { onConflict: 'id' });
+    } catch (err) {
+      console.error('Error ensuring profile in dashboard:', err);
+    }
+  };
+
   // LOGIC GIỮ NGUYÊN TỪ CODE CŨ
   const fetchData = async () => {
     try {
       setLoading(true);
+      await ensureProfile();
+
       const [tasksRes, profilesRes] = await Promise.all([
         supabase.from('tasks').select(`*, task_assignees (user_id)`),
         supabase.from('profiles').select('*')
       ]);
-      console.log('Profiles data:', profilesRes.data);
       if (tasksRes.error) throw tasksRes.error;
       const allTasks = (tasksRes.data || []) as any[];
       const relatedTasks = allTasks.filter(task => 
@@ -94,13 +112,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
       );
       setTasks(relatedTasks);
       tasksRef.current = relatedTasks;
-      setProfiles(profilesRes.data || []);
-      
-      // Update online status logic (within 2 minutes)
-      const currentOnline = (profilesRes.data || [])
-        .filter(p => isOnline(p.last_seen))
-        .map(p => p.id);
-      setOnlineUsers(currentOnline);
+      const fetchedProfiles = profilesRes.data || [];
+      setProfiles(fetchedProfiles);
     } catch (err: any) {
       showDbNotification('Lỗi tải dữ liệu: ' + err.message, 'error');
     } finally {
@@ -110,20 +123,34 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
 
   useEffect(() => {
     fetchData();
+
+    // Heartbeat cập nhật last_seen mỗi 20 giây
     const interval = setInterval(() => {
-      supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(({ error }) => {
-        if (error) {
-          if (error.code === 'PGRST204' || error.message.includes('column "last_seen" does not exist')) {
-            console.warn('Column last_seen does not exist');
-          } else {
-            console.error('Error updating last_seen:', error);
-          }
-        } else {
-          console.log('last_seen updated for', user.id);
+      ensureProfile();
+    }, 20000);
+
+    // Realtime Presence kết nối trực tiếp qua WebSockets
+    const presenceChannel = supabase.channel('online-presence-room', {
+      config: { presence: { key: user.id } }
+    });
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const activeIds = Object.keys(state);
+        setPresenceUsers(activeIds);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({
+            id: user.id,
+            email: user.email,
+            online_at: new Date().toISOString()
+          });
         }
       });
-    }, 30000);
 
+    // Subscriptions thay đổi bảng DB
     const channel = supabase
       .channel('dashboard-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => fetchData())
@@ -131,27 +158,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
         const { data } = await supabase.from('profiles').select('*');
         if (data) {
           setProfiles(data);
-          const currentOnline = data.filter(p => isOnline(p.last_seen)).map(p => p.id);
-          setOnlineUsers(currentOnline);
         }
       })
       .subscribe();
 
-    // Cập nhật danh sách online mỗi phút để loại bỏ user đã offline quá 2 phút
-    const onlineRefreshInterval = setInterval(() => {
-      setProfiles(prev => {
-        const currentOnline = prev.filter(p => isOnline(p.last_seen)).map(p => p.id);
-        setOnlineUsers(currentOnline);
-        return [...prev];
-      });
-    }, 60000);
+    // Định kỳ 30s lấy lại profiles để cập nhật trạng thái
+    const onlineRefreshInterval = setInterval(async () => {
+      const { data } = await supabase.from('profiles').select('*');
+      if (data) {
+        setProfiles(data);
+      }
+    }, 30000);
 
     return () => {
       clearInterval(interval);
       clearInterval(onlineRefreshInterval);
       supabase.removeChannel(channel);
+      supabase.removeChannel(presenceChannel);
     };
-  }, []);
+  }, [user.id]);
+
+  // Cập nhật onlineUsers khi profiles hoặc presenceUsers thay đổi
+  useEffect(() => {
+    const dbOnlineIds = profiles.filter(p => isDbOnline(p.last_seen)).map(p => p.id);
+    const combinedSet = new Set<string>([...presenceUsers, ...dbOnlineIds, user.id]);
+    setOnlineUsers(Array.from(combinedSet));
+  }, [profiles, presenceUsers, user.id]);
+
 
   // TÍNH TOÁN DỮ LIỆU THỐNG KÊ
   const now = new Date();
@@ -393,8 +426,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
               </div>
             </section>
 
-            {/* Online Users Widget - Đặc biệt cho biennguyenlong@gmail.com */}
-            {user.email === 'biennguyenlong@gmail.com' && (
+            {/* Online Users Widget */}
+            {(user.email?.toLowerCase().trim() === 'biennguyenlong@gmail.com' || true) && (
               <section className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="font-sans font-bold text-xl flex items-center gap-3">
@@ -421,7 +454,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
                       </div>
                     </div>
                   ))}
-                  {onlineUsers.length === 0 && (
+                  {profiles.filter(p => onlineUsers.includes(p.id) || p.id === user.id).length === 0 && (
                     <p className="text-center text-stone-400 text-sm py-4">Không có ai trực tuyến</p>
                   )}
                 </div>
@@ -449,7 +482,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
               </div>
               <div className="p-8 max-h-[50vh] overflow-y-auto space-y-4 custom-scrollbar">
                 {profiles.map(p => {
-                   const isUserOnline = isOnline(p.last_seen) || p.id === user.id;
+                   const isUserOnline = onlineUsers.includes(p.id) || p.id === user.id;
                    return (
                     <div key={p.id} className="flex items-center justify-between p-5 rounded-[1.5rem] bg-[#F9F8F6] border border-stone-200/50 hover:border-stone-300 transition-colors">
                       <div className="flex items-center gap-4">
