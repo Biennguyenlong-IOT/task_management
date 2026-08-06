@@ -9,13 +9,14 @@ import {
 import { 
   TrendingUp, CheckCircle2, Clock as ClockIcon, PlayCircle, Users, 
   X, LogOut, RefreshCw, LayoutGrid, Activity, BarChart3, PieChart as PieChartIcon, Calendar as CalendarIcon,
-  ArrowUpRight, ArrowDownRight, CalendarDays, CalendarRange
+  ArrowUpRight, ArrowDownRight, CalendarDays, CalendarRange, KeyRound
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Notification, NotificationType } from './Notification';
 import WeatherWidget from './WeatherWidget';
 import { Clock } from './Clock';
 import { Calendar as CalendarComponent } from './Calendar';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { 
   startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear,
   subWeeks, subMonths, isWithinInterval, parseISO, format, eachDayOfInterval,
@@ -62,6 +63,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPersonnel, setShowPersonnel] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [presenceUsers, setPresenceUsers] = useState<string[]>([]);
   const [dbNotification, setDbNotification] = useState<{ message: string, type: NotificationType } | null>(null);
@@ -283,6 +285,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
             </button>
             <button onClick={onViewMaintenance} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-all shadow-md">
               <CalendarIcon size={18} /> Bảo trì
+            </button>
+            <button 
+              onClick={() => setIsChangePasswordOpen(true)}
+              title="Đổi mật khẩu"
+              className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 rounded-xl text-sm font-semibold transition-all"
+            >
+              <KeyRound size={18} /> Đổi mật khẩu
             </button>
             <button 
               onClick={async () => {
@@ -521,6 +530,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
       </AnimatePresence>
 
       <Notification message={dbNotification?.message || null} type={dbNotification?.type || 'info'} onClose={() => setDbNotification(null)} />
+      
+      <ChangePasswordModal 
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+        userEmail={user.email}
+      />
     </div>
   );
 };
