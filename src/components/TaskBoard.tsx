@@ -102,25 +102,16 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
   useEffect(() => {
     const ensureProfile = async () => {
       if (!user) return;
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', user.id)
-        .single();
-        
-      if (error && (error.code === 'PGRST116' || error.message.includes('JSON object requested'))) {
-        // Profile not found, create it
-        console.log('Creating missing profile for user:', user.email);
-        await supabase.from('profiles').insert([
-          { 
-            id: user.id, 
-            email: user.email, 
-            display_name: user.email?.split('@')[0],
-            last_seen: new Date().toISOString()
-          }
-        ]);
+      try {
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          email: user.email,
+          display_name: user.email?.split('@')[0],
+          last_seen: new Date().toISOString()
+        }, { onConflict: 'id' });
         fetchProfiles();
+      } catch (err) {
+        console.error('Error ensuring profile in TaskBoard:', err);
       }
     };
 
@@ -128,9 +119,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
     fetchTasks();
     fetchProfiles();
     updateLastSeen();
-    // checkAndGenerateMaintenanceTasks(user.id).then(() => fetchTasks()); // Đã di chuyển ra ngoài
 
-    const lastSeenInterval = setInterval(updateLastSeen, 30000);
+    const lastSeenInterval = setInterval(updateLastSeen, 20000);
+
 
     // Subscribe to real-time changes
     const channel = supabase
@@ -220,22 +211,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ user, onGoToDashboard }) =
 
   const updateLastSeen = async () => {
     try {
-      const { error } = await supabase
+      await supabase
         .from('profiles')
-        .update({ last_seen: new Date().toISOString() })
-        .eq('id', user.id);
-      if (error) {
-        if (error.code === 'PGRST204' || error.message.includes('column "last_seen" does not exist')) {
-          // Silently fail if column doesn't exist yet
-          return;
-        }
-        console.error('Error updating last seen:', error);
-        showNotification('Lỗi cập nhật trạng thái online: ' + error.message, 'error');
-      }
+        .upsert({
+          id: user.id,
+          email: user.email,
+          display_name: user.email?.split('@')[0],
+          last_seen: new Date().toISOString()
+        }, { onConflict: 'id' });
     } catch (err) {
-      console.error('Unexpected error updating last seen:', err);
+      console.error('Error updating last seen:', err);
     }
   };
+
 
   const fetchTasks = async () => {
     try {
