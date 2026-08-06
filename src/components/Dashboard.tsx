@@ -186,6 +186,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
   }, [profiles, presenceUsers, user.id]);
 
 
+  const isManager = user.email?.toLowerCase().trim() === 'biennguyenlong@gmail.com';
+
   // TÍNH TOÁN DỮ LIỆU THỐNG KÊ
   const now = new Date();
   
@@ -321,8 +323,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
                   <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Đang xử lý</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-5xl font-sans font-bold text-emerald-400">{onlineUsers.length || 1}</div>
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">Active</div>
+                  <div className="text-5xl font-sans font-bold text-emerald-400">{isManager ? (onlineUsers.length || 1) : profiles.length}</div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/40 mt-2 font-bold">{isManager ? 'Active' : 'Thành viên'}</div>
                 </div>
               </div>
             </div>
@@ -347,7 +349,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
               <StatCard title="Tổng Task" value={totalTasks} icon={<Activity />} color="stone" />
               <StatCard title="Tuần này" value={tasksThisWeek} icon={<CalendarDays />} color="blue" subtitle={`${tasksLastWeek > 0 ? (tasksThisWeek >= tasksLastWeek ? '+' : '-') + Math.abs(Math.round(((tasksThisWeek - tasksLastWeek) / tasksLastWeek) * 100)) + '%' : 'Mới'} so với tuần trước`} />
               <StatCard title="Tháng này" value={tasksThisMonth} icon={<CalendarRange />} color="amber" subtitle={`${tasksLastMonth > 0 ? (tasksThisMonth >= tasksLastMonth ? '+' : '-') + Math.abs(Math.round(((tasksThisMonth - tasksLastMonth) / tasksLastMonth) * 100)) + '%' : 'Mới'} so với tháng trước`} />
-              <StatCard title="Năm này" value={tasksThisYear} icon={<TrendingUp />} color="emerald" subtitle="Tổng hoàn thành" />
+              <StatCard title="Nhân Sự" value={profiles.length} icon={<Users />} color="emerald" onClick={() => setShowPersonnel(true)} isLink subtitle={isManager ? `${onlineUsers.length} trực tuyến` : `${profiles.length} thành viên`} />
             </div>
 
             {/* Biểu đồ xu hướng 7 ngày */}
@@ -426,8 +428,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
               </div>
             </section>
 
-            {/* Online Users Widget */}
-            {(user.email?.toLowerCase().trim() === 'biennguyenlong@gmail.com' || true) && (
+            {/* Online Users Widget - Chỉ dành cho tài khoản manager (biennguyenlong@gmail.com) */}
+            {isManager && (
               <section className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="font-sans font-bold text-xl flex items-center gap-3">
@@ -490,16 +492,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBack, onViewMaintenance,
                           <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center font-bold text-stone-900 border border-stone-200 shadow-sm text-lg">
                             {p.display_name?.[0] || p.email[0].toUpperCase()}
                           </div>
-                          {isUserOnline && <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-4 border-[#F9F8F6] rounded-full"></div>}
+                          {isManager && isUserOnline && <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-4 border-[#F9F8F6] rounded-full"></div>}
                         </div>
                         <div>
                           <div className="font-bold text-stone-900">{p.display_name || p.email.split('@')[0]}</div>
                           <div className="text-xs text-stone-400 font-medium">{p.email}</div>
                         </div>
                       </div>
-                      <div className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${isUserOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-200 text-stone-500'}`}>
-                        {isUserOnline ? 'Trực tuyến' : 'Ngoại tuyến'}
-                      </div>
+                      {isManager ? (
+                        <div className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${isUserOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-200 text-stone-500'}`}>
+                          {isUserOnline ? 'Trực tuyến' : 'Ngoại tuyến'}
+                        </div>
+                      ) : (
+                        <div className="px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-stone-100 text-stone-600">
+                          Thành viên
+                        </div>
+                      )}
                     </div>
                   );
                 })}
